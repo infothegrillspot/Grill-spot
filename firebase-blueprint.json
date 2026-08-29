@@ -1,0 +1,74 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role-based access for The Grill Spot",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "favoriteBranch": { "type": "string" },
+        "dietaryPreferences": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "customer"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role", "createdAt"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Table reservations at The Grill Spot Lahore",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "guests": { "type": "number" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "area": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled"] },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerName", "email", "phone", "guests", "date", "time", "status", "createdAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Food order placed at The Grill Spot",
+      "type": "object",
+      "properties": {
+        "items": { "type": "string" },
+        "orderType": { "type": "string", "enum": ["dinein", "takeaway", "delivery"] },
+        "subtotal": { "type": "number" },
+        "deliveryFee": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "customerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "preparing", "delivering", "completed", "cancelled"] },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderType", "subtotal", "grandTotal", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User account documents keyed by Auth UID"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Table bookings and reservations"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Food orders across Lahore branches"
+    }
+  }
+}

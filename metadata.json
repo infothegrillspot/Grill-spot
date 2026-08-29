@@ -1,0 +1,8 @@
+{
+  "name": "The Grill Spot",
+  "description": "Fired up and served fresh. The Grill Spot serves smashed burgers, shawarma, wood-fired pizza, charcoal BBQ, loaded fries, drinks and housemade sauces.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
