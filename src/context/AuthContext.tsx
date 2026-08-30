@@ -180,9 +180,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return profile;
     } catch (error: unknown) {
       console.error("Google sign in error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Please check popup permissions and try again.";
-      toast.error("Google Sign-In failed", {
-        description: errorMessage,
+      let title = "Google Sign-In failed";
+      let description = "Please check your network and popup permissions, then try again.";
+
+      if (error && typeof error === "object") {
+        const authErr = error as { code?: string; message?: string };
+        if (authErr.code === "auth/unauthorized-domain" || authErr.message?.includes("unauthorized-domain")) {
+          title = "Domain Not Authorized in Firebase";
+          const currentHost = typeof window !== "undefined" ? window.location.hostname : "your Vercel domain";
+          description = `Please add "${currentHost}" to Firebase Console -> Authentication -> Settings -> Authorized Domains.`;
+        } else if (authErr.code === "auth/popup-blocked" || authErr.message?.includes("popup-blocked")) {
+          title = "Pop-up Blocked";
+          description = "Please allow pop-ups for this website in your browser settings to sign in with Google.";
+        } else if (authErr.code === "auth/popup-closed-by-user" || authErr.message?.includes("closed-by-user")) {
+          title = "Sign-In Cancelled";
+          description = "The Google sign-in pop-up was closed before completing.";
+        } else if (authErr.message) {
+          description = authErr.message;
+        }
+      }
+
+      toast.error(title, {
+        description,
+        duration: 8000,
       });
       return null;
     } finally {
