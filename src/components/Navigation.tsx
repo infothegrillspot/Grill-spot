@@ -39,22 +39,6 @@ const Navigation = ({
 
   const location = useLocation();
   const navigate = useNavigate();
-  const isHomePage = location.pathname === "/";
-
-  const handleBookNow = () => {
-    if (isHomePage) {
-      document.getElementById('booking')?.scrollIntoView({
-        behavior: 'smooth'
-      });
-    } else {
-      navigate('/');
-      setTimeout(() => {
-        document.getElementById('booking')?.scrollIntoView({
-          behavior: 'smooth'
-        });
-      }, 100);
-    }
-  };
 
   const navItems = [{
     label: "Menu",
@@ -212,20 +196,6 @@ const Navigation = ({
                     </Button>
                   </Link>
                 )}
-
-                {/* Reserve a Table Button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={`rounded-full smooth-hover text-[11px] uppercase tracking-wider font-normal backdrop-blur-md border border-white/30 shadow-[0_4px_30px_rgba(0,0,0,0.1)] px-4 lg:px-5 h-8 ${
-                    isDark || !isScrolled
-                      ? "bg-white/10 text-white hover:bg-primary/80 hover:text-white hover:border-primary/80"
-                      : "bg-white/20 text-foreground hover:bg-primary/80 hover:text-white hover:border-primary/80"
-                  }`}
-                  onClick={handleBookNow}
-                >
-                  Reserve a Table
-                </Button>
               </div>
             </div>
 
@@ -346,13 +316,6 @@ const Navigation = ({
                   Sign Out
                 </button>
               )}
-
-              <Button variant="outline" className={`w-full mt-3 rounded-full text-[11px] uppercase tracking-wider font-normal backdrop-blur-md border border-white/30 shadow-[0_4px_30px_rgba(0,0,0,0.1)] px-5 ${isDark || !isScrolled ? "bg-white/10 text-white hover:bg-primary/80 hover:text-white hover:border-primary/80" : "bg-white/20 text-foreground hover:bg-primary/80 hover:text-white hover:border-primary/80"}`} onClick={() => {
-            setIsMobileMenuOpen(false);
-            handleBookNow();
-          }}>
-                Reserve a Table
-              </Button>
             </motion.div>}
         </AnimatePresence>
         </div>

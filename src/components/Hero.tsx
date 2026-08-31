@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Flame } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import heroImage from "@/assets/hero-grill.jpg";
 import burgerImage from "@/assets/menu-burger.jpg";
 import bbqImage from "@/assets/menu-bbq.jpg";
@@ -16,6 +17,7 @@ const slides = [
 const SLIDE_DURATION = 5000;
 
 const Hero = () => {
+  const navigate = useNavigate();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [progress, setProgress] = useState(0);
 
@@ -92,10 +94,10 @@ const Hero = () => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.5 }}
-          onClick={() => document.getElementById('booking')?.scrollIntoView({ behavior: 'smooth' })}
-          className="mt-6 flex items-center gap-3 bg-white text-foreground px-6 py-3 rounded-full text-sm tracking-wide hover:bg-white/90 transition-colors"
+          onClick={() => navigate('/locations')}
+          className="mt-6 flex items-center gap-3 bg-white text-foreground px-6 py-3 rounded-full text-sm tracking-wide hover:bg-white/90 transition-colors cursor-pointer"
         >
-          Reserve a Table
+          Explore Menu & Order
           <ArrowRight className="w-4 h-4" />
         </motion.button>
       </div>

@@ -40,9 +40,9 @@ const Footer = () => {
                 </Link>
               </li>
               <li>
-                <a href="/#booking" className="text-background/70 hover:text-background smooth-hover text-xs font-light">
-                  Reserve a Table
-                </a>
+                <Link to="/locations" className="text-background/70 hover:text-background smooth-hover text-xs font-light">
+                  Order Online
+                </Link>
               </li>
               <li>
                 <Link to="/admin" className="text-background/70 hover:text-background smooth-hover text-xs font-light">
