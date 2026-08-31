@@ -148,7 +148,6 @@ d1Router.post("/users/upsert", async (req: Request, res: Response) => {
     } catch (upsertErr: unknown) {
       const errMsg = upsertErr instanceof Error ? upsertErr.message : String(upsertErr);
       if (errMsg.includes("no column named") || errMsg.includes("no such table") || errMsg.includes("no such column")) {
-        console.log("Healing D1 schema and retrying user upsert...");
         await initializeD1Database();
         const result = await performUpsert();
         return res.json({ success: true, user: result });
@@ -219,6 +218,9 @@ d1Router.post("/orders", async (req: Request, res: Response) => {
       specialInstructions = "",
       status = "pending",
       items = [],
+      riderId = null,
+      riderName = null,
+      riderPhone = null,
     } = req.body;
 
     const itemsJson = typeof items === "string" ? items : JSON.stringify(items);
@@ -226,8 +228,8 @@ d1Router.post("/orders", async (req: Request, res: Response) => {
     const performInsert = async () => {
       await runD1Query(
         `INSERT INTO orders (
-          id, userId, customerName, phone, orderType, subtotal, deliveryFee, grandTotal, address, specialInstructions, status, itemsJson, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+          id, userId, customerName, phone, orderType, subtotal, deliveryFee, grandTotal, address, specialInstructions, status, itemsJson, riderId, riderName, riderPhone, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
         [
           id,
           userId || null,
@@ -241,6 +243,9 @@ d1Router.post("/orders", async (req: Request, res: Response) => {
           specialInstructions || "",
           status,
           itemsJson,
+          riderId || null,
+          riderName || null,
+          riderPhone || null,
         ]
       );
 
@@ -266,6 +271,41 @@ d1Router.post("/orders", async (req: Request, res: Response) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to create order";
     console.error("Create order error:", message);
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+// Allocate Order to Rider
+d1Router.patch("/orders/:id/allocate", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { riderId, riderName, riderPhone, status = "out_for_delivery" } = req.body;
+
+    if (!riderId || !riderName) {
+      return res.status(400).json({ success: false, error: "Rider ID and Name are required for allocation" });
+    }
+
+    await runD1Query(
+      `UPDATE orders SET 
+        riderId = ?, 
+        riderName = ?, 
+        riderPhone = ?, 
+        status = ?, 
+        allocatedAt = datetime('now'), 
+        updatedAt = datetime('now') 
+      WHERE id = ?`,
+      [riderId, riderName, riderPhone || "", status, id]
+    );
+
+    // Also update rider's active count if possible
+    await runD1Query(
+      "UPDATE riders SET activeDeliveries = activeDeliveries + 1, status = 'delivering', updatedAt = datetime('now') WHERE id = ?",
+      [riderId]
+    ).catch(() => {});
+
+    res.json({ success: true, message: `Order ${id} successfully allocated to rider ${riderName}` });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to allocate order to rider";
     res.status(500).json({ success: false, error: message });
   }
 });
@@ -429,7 +469,287 @@ d1Router.delete("/bookings/:id", async (req: Request, res: Response) => {
   }
 });
 
-// 6. Aggregated Stats for Admin Dashboard
+// 6. Staff Management Endpoints
+d1Router.get("/staff", async (req: Request, res: Response) => {
+  try {
+    const staff = await runD1Query("SELECT * FROM staff ORDER BY createdAt DESC").catch(async () => {
+      await initializeD1Database();
+      return runD1Query("SELECT * FROM staff ORDER BY rowid DESC").catch(() => []);
+    });
+    res.json({ success: true, staff });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch staff";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+d1Router.post("/staff", async (req: Request, res: Response) => {
+  try {
+    const {
+      id = `stf_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      name,
+      email = "",
+      phone = "",
+      role = "Line Cook",
+      branch = "Gulberg III",
+      shift = "Evening",
+      status = "active",
+      salary = "Rs. 65,000",
+      joinedDate = new Date().toISOString().split("T")[0],
+    } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ success: false, error: "Staff name is required" });
+    }
+
+    await runD1Query(
+      `INSERT INTO staff (id, name, email, phone, role, branch, shift, status, salary, joinedDate, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      [id, name, email, phone, role, branch, shift, status, salary, joinedDate]
+    );
+
+    const inserted = await runD1Query("SELECT * FROM staff WHERE id = ? LIMIT 1", [id]);
+    res.json({ success: true, staff: inserted[0] });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to create staff member";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+d1Router.put("/staff/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, email, phone, role, branch, shift, status, salary } = req.body;
+
+    await runD1Query(
+      `UPDATE staff SET 
+        name = coalesce(?, name),
+        email = coalesce(?, email),
+        phone = coalesce(?, phone),
+        role = coalesce(?, role),
+        branch = coalesce(?, branch),
+        shift = coalesce(?, shift),
+        status = coalesce(?, status),
+        salary = coalesce(?, salary),
+        updatedAt = datetime('now')
+      WHERE id = ?`,
+      [name, email, phone, role, branch, shift, status, salary, id]
+    );
+
+    const updated = await runD1Query("SELECT * FROM staff WHERE id = ? LIMIT 1", [id]);
+    res.json({ success: true, staff: updated[0] });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update staff";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+d1Router.delete("/staff/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await runD1Query("DELETE FROM staff WHERE id = ?", [id]);
+    res.json({ success: true, message: `Staff ${id} deleted` });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to delete staff";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+// 7. Riders Fleet Endpoints
+d1Router.get("/riders", async (req: Request, res: Response) => {
+  try {
+    const riders = await runD1Query("SELECT * FROM riders ORDER BY createdAt DESC").catch(async () => {
+      await initializeD1Database();
+      return runD1Query("SELECT * FROM riders ORDER BY rowid DESC").catch(() => []);
+    });
+    res.json({ success: true, riders });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch riders";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+d1Router.post("/riders", async (req: Request, res: Response) => {
+  try {
+    const {
+      id = `rdr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      name,
+      phone,
+      vehicleType = "Motorbike (Honda 125)",
+      vehiclePlate = "",
+      assignedZone = "Gulberg & DHA",
+      status = "available",
+      activeDeliveries = 0,
+      rating = 4.9,
+    } = req.body;
+
+    if (!name || !phone) {
+      return res.status(400).json({ success: false, error: "Rider name and phone are required" });
+    }
+
+    await runD1Query(
+      `INSERT INTO riders (id, name, phone, vehicleType, vehiclePlate, assignedZone, status, activeDeliveries, rating, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      [id, name, phone, vehicleType, vehiclePlate, assignedZone, status, Number(activeDeliveries), Number(rating)]
+    );
+
+    const inserted = await runD1Query("SELECT * FROM riders WHERE id = ? LIMIT 1", [id]);
+    res.json({ success: true, rider: inserted[0] });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to create rider";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+d1Router.put("/riders/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, phone, vehicleType, vehiclePlate, assignedZone, status } = req.body;
+
+    await runD1Query(
+      `UPDATE riders SET 
+        name = coalesce(?, name),
+        phone = coalesce(?, phone),
+        vehicleType = coalesce(?, vehicleType),
+        vehiclePlate = coalesce(?, vehiclePlate),
+        assignedZone = coalesce(?, assignedZone),
+        status = coalesce(?, status),
+        updatedAt = datetime('now')
+      WHERE id = ?`,
+      [name, phone, vehicleType, vehiclePlate, assignedZone, status, id]
+    );
+
+    const updated = await runD1Query("SELECT * FROM riders WHERE id = ? LIMIT 1", [id]);
+    res.json({ success: true, rider: updated[0] });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update rider";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+d1Router.delete("/riders/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await runD1Query("DELETE FROM riders WHERE id = ?", [id]);
+    res.json({ success: true, message: `Rider ${id} deleted` });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to delete rider";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+// 8. Menu Items Endpoints
+d1Router.get("/menu", async (req: Request, res: Response) => {
+  try {
+    const menuItems = await runD1Query("SELECT * FROM menu_items ORDER BY category, name").catch(async () => {
+      await initializeD1Database();
+      return runD1Query("SELECT * FROM menu_items ORDER BY rowid DESC").catch(() => []);
+    });
+    res.json({ success: true, menu: menuItems });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch menu";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+d1Router.post("/menu", async (req: Request, res: Response) => {
+  try {
+    const {
+      id = `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      name,
+      category = "Smashed Burgers",
+      price = 0,
+      description = "",
+      image = "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80",
+      features = "[]",
+      isAvailable = 1,
+      isFeatured = 0,
+      spiceLevel = "Medium",
+      prepTime = "15 mins",
+    } = req.body;
+
+    if (!name || price === undefined) {
+      return res.status(400).json({ success: false, error: "Item name and price are required" });
+    }
+
+    const featuresJson = typeof features === "string" ? features : JSON.stringify(features);
+
+    await runD1Query(
+      `INSERT INTO menu_items (id, name, category, price, description, image, features, isAvailable, isFeatured, spiceLevel, prepTime, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      [id, name, category, Number(price), description, image, featuresJson, Number(isAvailable), Number(isFeatured), spiceLevel, prepTime]
+    );
+
+    const inserted = await runD1Query("SELECT * FROM menu_items WHERE id = ? LIMIT 1", [id]);
+    res.json({ success: true, item: inserted[0] });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to create menu item";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+d1Router.put("/menu/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      category,
+      price,
+      description,
+      image,
+      isAvailable,
+      isFeatured,
+      spiceLevel,
+      prepTime,
+    } = req.body;
+
+    await runD1Query(
+      `UPDATE menu_items SET 
+        name = coalesce(?, name),
+        category = coalesce(?, category),
+        price = coalesce(?, price),
+        description = coalesce(?, description),
+        image = coalesce(?, image),
+        isAvailable = coalesce(?, isAvailable),
+        isFeatured = coalesce(?, isFeatured),
+        spiceLevel = coalesce(?, spiceLevel),
+        prepTime = coalesce(?, prepTime),
+        updatedAt = datetime('now')
+      WHERE id = ?`,
+      [
+        name,
+        category,
+        price !== undefined ? Number(price) : null,
+        description,
+        image,
+        isAvailable !== undefined ? Number(isAvailable) : null,
+        isFeatured !== undefined ? Number(isFeatured) : null,
+        spiceLevel,
+        prepTime,
+        id,
+      ]
+    );
+
+    const updated = await runD1Query("SELECT * FROM menu_items WHERE id = ? LIMIT 1", [id]);
+    res.json({ success: true, item: updated[0] });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update menu item";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+d1Router.delete("/menu/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await runD1Query("DELETE FROM menu_items WHERE id = ?", [id]);
+    res.json({ success: true, message: `Menu item ${id} deleted` });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to delete menu item";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+// 9. Aggregated Stats for Admin Dashboard
 d1Router.get("/stats", async (req: Request, res: Response) => {
   try {
     const [ordersCount] = await runD1Query<{ count: number; revenue: number }>(
@@ -441,6 +761,15 @@ d1Router.get("/stats", async (req: Request, res: Response) => {
     const [usersCount] = await runD1Query<{ count: number }>(
       "SELECT count(*) as count FROM users"
     ).catch(() => [{ count: 0 }]);
+    const [staffCount] = await runD1Query<{ count: number }>(
+      "SELECT count(*) as count FROM staff"
+    ).catch(() => [{ count: 0 }]);
+    const [ridersCount] = await runD1Query<{ count: number }>(
+      "SELECT count(*) as count FROM riders"
+    ).catch(() => [{ count: 0 }]);
+    const [menuCount] = await runD1Query<{ count: number }>(
+      "SELECT count(*) as count FROM menu_items"
+    ).catch(() => [{ count: 0 }]);
 
     res.json({
       success: true,
@@ -449,6 +778,9 @@ d1Router.get("/stats", async (req: Request, res: Response) => {
         totalRevenue: ordersCount?.revenue || 0,
         totalBookings: bookingsCount?.count || 0,
         totalUsers: usersCount?.count || 0,
+        totalStaff: staffCount?.count || 0,
+        totalRiders: ridersCount?.count || 0,
+        totalMenuItems: menuCount?.count || 0,
       },
     });
   } catch (error: unknown) {

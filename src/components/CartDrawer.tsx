@@ -5,16 +5,32 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { saveOrderToFirestore } from "@/services/firebaseDb";
 import { createD1Order } from "@/lib/d1Api";
-import { ShoppingBag, Plus, Minus, Trash2, ArrowRight, CheckCircle2, MapPin, Bike, Store, Utensils, Loader2 } from "lucide-react";
+import {
+  ShoppingBag,
+  Plus,
+  Minus,
+  Trash2,
+  ArrowRight,
+  CheckCircle2,
+  MapPin,
+  Bike,
+  Store,
+  Utensils,
+  Loader2,
+  User,
+  Phone,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export const CartDrawer = () => {
   const { cart, removeFromCart, updateQuantity, clearCart, subtotal, isCartOpen, setIsCartOpen, totalItems } = useCart();
   const { user } = useAuth();
-  const [orderType, setOrderType] = useState<"delivery" | "dinein" | "takeaway">("dinein");
+  const [orderType, setOrderType] = useState<"delivery" | "dinein" | "takeaway">("delivery");
   const [orderSubmitted, setOrderSubmitted] = useState(false);
+  const [customerName, setCustomerName] = useState(user?.displayName || "");
+  const [customerPhone, setCustomerPhone] = useState(user?.phone || "+92 3");
+  const [deliveryAddress, setDeliveryAddress] = useState(user?.address || "");
   const [specialInstructions, setSpecialInstructions] = useState("");
-  const [deliveryAddress, setDeliveryAddress] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const deliveryFee = orderType === "delivery" ? 250 : 0;
@@ -22,6 +38,20 @@ export const CartDrawer = () => {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
+
+    if (!customerName.trim()) {
+      toast.error("Please enter your name for the order");
+      return;
+    }
+    if (!customerPhone.trim() || customerPhone.length < 7) {
+      toast.error("Please enter a valid mobile number for rider dispatch");
+      return;
+    }
+    if (orderType === "delivery" && !deliveryAddress.trim()) {
+      toast.error("Please enter your delivery street address in Lahore");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const orderPayload = {
@@ -36,9 +66,9 @@ export const CartDrawer = () => {
         subtotal,
         deliveryFee,
         grandTotal,
-        customerName: user?.displayName || "Valued Customer",
-        phone: user?.phone || "",
-        address: orderType === "delivery" ? (deliveryAddress || user?.address || "Gulberg III, Lahore") : "MM Alam Road Branch",
+        customerName: customerName.trim(),
+        phone: customerPhone.trim(),
+        address: orderType === "delivery" ? deliveryAddress.trim() : "Dine-in / Pickup (MM Alam Road Branch)",
         specialInstructions,
         status: "pending" as const,
         userId: user?.uid,
@@ -52,7 +82,7 @@ export const CartDrawer = () => {
 
       setOrderSubmitted(true);
       toast.success("Order Placed Successfully!", {
-        description: `Your order for Rs. ${grandTotal.toLocaleString()} was saved to Cloudflare D1 SQL and is being prepared on the grill.`,
+        description: `Your order for Rs. ${grandTotal.toLocaleString()} was sent to the kitchen and queued for rider dispatch.`,
       });
     } catch (err) {
       console.warn("Order placement fallback:", err);
@@ -103,16 +133,26 @@ export const CartDrawer = () => {
             </p>
             <div className="w-full p-4 rounded-lg bg-accent/40 text-left text-xs space-y-1.5 font-light">
               <div className="flex justify-between">
+                <span className="text-muted-foreground">Customer:</span>
+                <span className="font-normal text-foreground">{customerName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Phone:</span>
+                <span className="font-normal text-foreground font-mono">{customerPhone}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-muted-foreground">Type:</span>
                 <span className="capitalize font-normal text-foreground">{orderType}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Location:</span>
-                <span className="font-normal text-foreground">Gulberg III, Lahore</span>
+                <span className="text-muted-foreground">Address:</span>
+                <span className="font-normal text-foreground truncate max-w-[200px]">
+                  {orderType === "delivery" ? deliveryAddress : "MM Alam Branch"}
+                </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Paid:</span>
-                <span className="font-normal text-primary">Rs. {grandTotal.toLocaleString()}</span>
+              <div className="flex justify-between border-t border-border pt-1">
+                <span className="text-muted-foreground">Total:</span>
+                <span className="font-medium text-primary">Rs. {grandTotal.toLocaleString()}</span>
               </div>
             </div>
             <Button
@@ -146,6 +186,16 @@ export const CartDrawer = () => {
               <div className="grid grid-cols-3 gap-1 bg-card/60 p-1 rounded-md border border-border/60">
                 <button
                   type="button"
+                  onClick={() => setOrderType("delivery")}
+                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded text-[11px] font-light transition-all ${
+                    orderType === "delivery" ? "bg-primary text-primary-foreground font-normal shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Bike className="w-3 h-3" />
+                  Delivery
+                </button>
+                <button
+                  type="button"
                   onClick={() => setOrderType("dinein")}
                   className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded text-[11px] font-light transition-all ${
                     orderType === "dinein" ? "bg-primary text-primary-foreground font-normal shadow-sm" : "text-muted-foreground hover:text-foreground"
@@ -164,20 +214,10 @@ export const CartDrawer = () => {
                   <Store className="w-3 h-3" />
                   Takeaway
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setOrderType("delivery")}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded text-[11px] font-light transition-all ${
-                    orderType === "delivery" ? "bg-primary text-primary-foreground font-normal shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Bike className="w-3 h-3" />
-                  Delivery
-                </button>
               </div>
             </div>
 
-            {/* Cart Items List */}
+            {/* Cart Items List & Customer Details */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {cart.map((item) => (
                 <div
@@ -232,31 +272,57 @@ export const CartDrawer = () => {
                 </div>
               ))}
 
-              <div className="pt-2">
-                <input
-                  type="text"
-                  placeholder="Special instructions (e.g. extra toum / spicy)..."
-                  value={specialInstructions}
-                  onChange={(e) => setSpecialInstructions(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-md border border-border bg-background/50 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
+              {/* Customer Contact & Address Form */}
+              <div className="p-3.5 rounded-lg border border-border bg-card/60 space-y-3">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+                  Customer & Delivery Details
+                </p>
 
-              {orderType === "delivery" && (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 p-3 bg-accent/40 rounded-md text-xs text-muted-foreground font-light">
-                    <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
-                    <span>Delivering to Gulberg, DHA, Cantt, & nearby Lahore areas (35-45 mins)</span>
+                  <div className="relative">
+                    <User className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+                    <input
+                      type="text"
+                      placeholder="Your Full Name *"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
                   </div>
+
+                  <div className="relative">
+                    <Phone className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+                    <input
+                      type="text"
+                      placeholder="WhatsApp / Phone Number (e.g. +92 300 1234567) *"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                    />
+                  </div>
+
+                  {orderType === "delivery" && (
+                    <div className="relative">
+                      <MapPin className="w-3.5 h-3.5 absolute left-3 top-2.5 text-primary" />
+                      <input
+                        type="text"
+                        placeholder="House / Street, Phase / Block, Lahore *"
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        className="w-full pl-9 pr-3 py-1.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                  )}
+
                   <input
                     type="text"
-                    placeholder="Enter street address / Lahore sector..."
-                    value={deliveryAddress}
-                    onChange={(e) => setDeliveryAddress(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-md border border-border bg-background/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="Special instructions (e.g. extra toum / less spicy)..."
+                    value={specialInstructions}
+                    onChange={(e) => setSpecialInstructions(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Footer / Calculations in PKR */}
