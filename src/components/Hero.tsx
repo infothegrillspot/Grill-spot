@@ -94,7 +94,12 @@ const Hero = () => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.5 }}
-          onClick={() => navigate('/locations')}
+          onClick={() => {
+            const menuEl = document.getElementById("menu");
+            if (menuEl) {
+              menuEl.scrollIntoView({ behavior: "smooth" });
+            }
+          }}
           className="mt-6 flex items-center gap-3 bg-white text-foreground px-6 py-3 rounded-full text-sm tracking-wide hover:bg-white/90 transition-colors cursor-pointer"
         >
           Explore Menu & Order

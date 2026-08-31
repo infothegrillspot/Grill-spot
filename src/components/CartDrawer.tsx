@@ -48,15 +48,15 @@ export const CartDrawer = () => {
 
   // Sync profile details whenever user logs in or updates profile
   useEffect(() => {
-    if (user) {
-      if (user.displayName && (!customerName || customerName === "Guest Customer")) {
-        setCustomerName(user.displayName);
+    if (user && isCartOpen) {
+      if (user.displayName) {
+        setCustomerName((prev) => (!prev || prev === "Guest Customer" ? user.displayName || "" : prev));
       }
-      if (user.phone && (!customerPhone || customerPhone === "+92 3")) {
-        setCustomerPhone(user.phone);
+      if (user.phone) {
+        setCustomerPhone((prev) => (!prev || prev === "+92 3" ? user.phone || "" : prev));
       }
-      if (user.address && !deliveryAddress) {
-        setDeliveryAddress(user.address);
+      if (user.address) {
+        setDeliveryAddress((prev) => (!prev ? user.address || "" : prev));
       }
     }
   }, [user, isCartOpen]);

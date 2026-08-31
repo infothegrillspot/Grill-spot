@@ -18,9 +18,8 @@ import {
   Check,
   MapPin,
   Clock,
-  PackageCheck,
+  Calendar,
 } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -40,10 +39,16 @@ import {
 
 interface NavigationProps {
   variant?: "default" | "dark";
+  onOpenAdmin?: () => void;
+  onOpenAuth?: () => void;
+  onSelectDish?: (dishId: string) => void;
 }
 
 const Navigation = ({
-  variant = "default"
+  variant = "default",
+  onOpenAdmin,
+  onOpenAuth,
+  onSelectDish,
 }: NavigationProps) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -87,14 +92,21 @@ const Navigation = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const location = useLocation();
-  const navigate = useNavigate();
+  const navLinks = [
+    { label: "Menu", targetId: "menu" },
+    { label: "Experience", targetId: "experience" },
+    { label: "Book Table", targetId: "booking" },
+    { label: "Our Story", targetId: "about" },
+    { label: "Contact", targetId: "contact" },
+  ];
 
-  const navItems = [{
-    label: "Menu",
-    href: "/locations",
-    isRoute: true
-  }];
+  const scrollToSection = (targetId: string) => {
+    setIsMobileMenuOpen(false);
+    const element = document.getElementById(targetId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    }
+  };
 
   const textColorClass = isDark || !isScrolled ? "text-white" : "text-foreground";
   const hoverTextClass = "hover:opacity-75 transition-opacity";
@@ -116,13 +128,9 @@ const Navigation = ({
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (searchQuery.trim()) {
-      setIsSearchFocused(false);
-      setIsMobileMenuOpen(false);
-      navigate(`/locations?q=${encodeURIComponent(searchQuery.trim())}`);
-    } else {
-      navigate("/locations");
-    }
+    setIsSearchFocused(false);
+    setIsMobileMenuOpen(false);
+    scrollToSection("menu");
   };
 
   const handleSelectDeliveryMode = (mode: "delivery" | "takeaway") => {
@@ -156,34 +164,33 @@ const Navigation = ({
           <div className="flex items-center justify-between gap-3 lg:gap-6">
             {/* Left Brand and Delivery/Pickup Option */}
             <div className="flex items-center gap-4 lg:gap-6">
-              <Link to="/">
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  <Flame
-                    className={`h-5 w-5 ${
+              <button
+                type="button"
+                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                className="flex items-center gap-2 cursor-pointer text-left"
+              >
+                <Flame
+                  className={`h-5 w-5 ${
+                    isMobileMenuOpen || isDark || !isScrolled
+                      ? "text-white"
+                      : "text-primary"
+                  }`}
+                />
+                <div className="flex flex-col">
+                  <span
+                    className={`text-sm font-medium tracking-wide leading-none ${
                       isMobileMenuOpen || isDark || !isScrolled
                         ? "text-white"
-                        : "text-primary"
+                        : "text-foreground"
                     }`}
-                  />
-                  <div className="flex flex-col">
-                    <span
-                      className={`text-sm font-medium tracking-wide leading-none ${
-                        isMobileMenuOpen || isDark || !isScrolled
-                          ? "text-white"
-                          : "text-foreground"
-                      }`}
-                    >
-                      The Grill Spot
-                    </span>
-                    <span className="text-[9px] uppercase tracking-widest text-primary font-semibold mt-0.5">
-                      Lahore
-                    </span>
-                  </div>
-                </motion.div>
-              </Link>
+                  >
+                    The Grill Spot
+                  </span>
+                  <span className="text-[9px] uppercase tracking-widest text-primary font-semibold mt-0.5">
+                    Lahore
+                  </span>
+                </div>
+              </button>
 
               {/* Delivery / Pickup Segmented Control (Desktop) */}
               <div
@@ -283,7 +290,7 @@ const Navigation = ({
                         onClick={handleSearchSubmit}
                         className="text-primary hover:underline text-[10px] lowercase flex items-center gap-1"
                       >
-                        view all in menu <ArrowRight className="w-3 h-3" />
+                        view in menu <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
 
@@ -294,10 +301,13 @@ const Navigation = ({
                             key={item.id}
                             className="p-2.5 flex items-center justify-between gap-3 hover:bg-accent/50 transition-colors group"
                           >
-                            <Link
-                              to={`/location/${item.id}`}
-                              onClick={() => setIsSearchFocused(false)}
-                              className="flex items-center gap-2.5 flex-1 min-w-0"
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsSearchFocused(false);
+                                if (onSelectDish) onSelectDish(item.id);
+                              }}
+                              className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
                             >
                               <img
                                 src={item.image}
@@ -312,7 +322,7 @@ const Navigation = ({
                                   Rs. {item.price.toLocaleString()}
                                 </p>
                               </div>
-                            </Link>
+                            </button>
                             <Button
                               type="button"
                               size="sm"
@@ -327,6 +337,7 @@ const Navigation = ({
                                   image: item.image,
                                   notes: item.features.slice(0, 2).join(", "),
                                 });
+                                toast.success(`Added ${item.name} to cart!`);
                               }}
                             >
                               <Plus className="w-3 h-3 mr-1" />
@@ -346,7 +357,7 @@ const Navigation = ({
                           onClick={() => {
                             setSearchQuery("");
                             setIsSearchFocused(false);
-                            navigate("/locations");
+                            scrollToSection("menu");
                           }}
                           className="mt-1 text-xs text-primary font-normal"
                         >
@@ -359,84 +370,58 @@ const Navigation = ({
               </AnimatePresence>
             </div>
 
-            {/* Right Action Cluster: Menu Link, Cart, Auth/Profile */}
+            {/* Right Action Cluster: Section Links, Cart, Auth/Profile */}
             <div className="flex items-center gap-3 lg:gap-4">
-              <div className="hidden md:flex items-center gap-6">
-                {navItems.map((item) =>
-                  item.isRoute ? (
-                    <Link
-                      key={item.label}
-                      to={item.href}
-                      className={`text-[11px] uppercase tracking-wider font-normal ${textColorClass} ${hoverTextClass}`}
-                    >
-                      {item.label}
-                    </Link>
-                  ) : (
-                    <a
-                      key={item.label}
-                      href={item.href}
-                      className={`text-[11px] uppercase tracking-wider font-normal ${textColorClass} ${hoverTextClass}`}
-                    >
-                      {item.label}
-                    </a>
-                  )
-                )}
+              <div className="hidden lg:flex items-center gap-6">
+                {navLinks.map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => scrollToSection(item.targetId)}
+                    className={`text-[11px] uppercase tracking-wider font-normal cursor-pointer ${textColorClass} ${hoverTextClass}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
 
-              <div className="flex items-center gap-2">
-                {/* Cart Button with Counter */}
-                <button
-                  type="button"
-                  onClick={() => setIsCartOpen(true)}
-                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-normal backdrop-blur-md border transition-all ${
-                    isDark || !isScrolled
-                      ? "bg-white/10 text-white border-white/20 hover:bg-white/20"
-                      : "bg-black/5 text-foreground border-border hover:bg-black/10"
-                  }`}
-                  aria-label="View Shopping Cart"
-                >
-                  <ShoppingBag className="h-3.5 w-3.5 text-primary" />
-                  <span className="hidden sm:inline">Cart</span>
-                  {totalItems > 0 && (
-                    <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
-                      {totalItems}
-                    </span>
-                  )}
-                </button>
+              {/* Cart Drawer Trigger */}
+              <button
+                type="button"
+                onClick={() => setIsCartOpen(true)}
+                className={`relative flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  isDark || !isScrolled
+                    ? "bg-white/10 hover:bg-white/20 text-white border border-white/20"
+                    : "bg-muted/80 hover:bg-muted text-foreground border border-border"
+                }`}
+              >
+                <ShoppingBag className="w-4 h-4 text-primary" />
+                <span className="hidden sm:inline text-[11px] uppercase tracking-wider">Cart</span>
+                <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
+                  {totalItems}
+                </span>
+              </button>
 
-                {/* User Profile or Sign Up Button */}
+              {/* User Account / Profile Menu */}
+              <div className="flex items-center gap-2">
                 {user ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button
-                        type="button"
-                        className={`flex items-center gap-2 px-2.5 py-1 rounded-full text-[11px] font-normal backdrop-blur-md border transition-all ${
+                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-full transition-all border ${
                           isDark || !isScrolled
-                            ? "bg-white/15 text-white border-white/30 hover:bg-white/25"
-                            : "bg-accent/80 text-foreground border-border hover:bg-accent"
+                            ? "bg-white/10 border-white/20 text-white hover:bg-white/20"
+                            : "bg-muted/80 border-border text-foreground hover:bg-muted"
                         }`}
                       >
-                        {user.photoURL ? (
-                          <img
-                            src={user.photoURL}
-                            alt={user.displayName || "User"}
-                            className="w-5 h-5 rounded-full object-cover border border-white/40"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-bold">
-                            {(user.displayName || user.email || "G")[0].toUpperCase()}
-                          </div>
-                        )}
-                        <span className="max-w-[75px] truncate text-xs hidden sm:inline">
-                          {user.displayName?.split(" ")[0] || "Profile"}
+                        <div className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold">
+                          {user.displayName ? user.displayName[0].toUpperCase() : "U"}
+                        </div>
+                        <span className="text-xs font-medium max-w-[80px] truncate hidden md:inline">
+                          {user.displayName || "Account"}
                         </span>
-                        {isAdmin && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
-                        )}
                       </button>
                     </DropdownMenuTrigger>
-
                     <DropdownMenuContent
                       align="end"
                       className="w-56 bg-card border-border p-1.5 shadow-xl"
@@ -454,19 +439,19 @@ const Navigation = ({
                       <DropdownMenuSeparator className="bg-border" />
 
                       <DropdownMenuItem
-                        onClick={() => setIsAddressesOpen(true)}
-                        className="text-xs cursor-pointer focus:bg-accent px-2 py-1.5"
-                      >
-                        <MapPin className="w-3.5 h-3.5 mr-2 text-primary" />
-                        Saved Addresses
-                      </DropdownMenuItem>
-
-                      <DropdownMenuItem
                         onClick={() => setIsOrdersOpen(true)}
                         className="text-xs cursor-pointer focus:bg-accent px-2 py-1.5"
                       >
                         <Clock className="w-3.5 h-3.5 mr-2 text-primary" />
                         Order History
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        onClick={() => setIsAddressesOpen(true)}
+                        className="text-xs cursor-pointer focus:bg-accent px-2 py-1.5"
+                      >
+                        <MapPin className="w-3.5 h-3.5 mr-2 text-primary" />
+                        Saved Addresses
                       </DropdownMenuItem>
 
                       <DropdownMenuItem
@@ -477,10 +462,10 @@ const Navigation = ({
                         Edit Profile
                       </DropdownMenuItem>
 
-                      {isAdmin && (
+                      {isAdmin && onOpenAdmin && (
                         <DropdownMenuItem
-                          onClick={() => navigate("/admin")}
-                          className="text-xs cursor-pointer focus:bg-accent px-2 py-1.5 text-primary"
+                          onClick={onOpenAdmin}
+                          className="text-xs cursor-pointer focus:bg-accent px-2 py-1.5 text-primary font-medium"
                         >
                           <ShieldCheck className="w-3.5 h-3.5 mr-2" />
                           Admin Dashboard
@@ -498,25 +483,25 @@ const Navigation = ({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
-                  <Link to="/auth" className="hidden md:inline-block">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={`rounded-full text-[11px] uppercase tracking-wider font-normal px-3.5 h-8 ${
-                        isDark || !isScrolled
-                          ? "text-white hover:bg-white/15 hover:text-white"
-                          : "text-foreground hover:bg-black/5 hover:text-foreground"
-                      }`}
-                    >
-                      <UserPlus className="h-3.5 w-3.5 mr-1.5" />
-                      Sign Up
-                    </Button>
-                  </Link>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={onOpenAuth}
+                    className={`rounded-full text-[11px] uppercase tracking-wider font-normal px-3.5 h-8 ${
+                      isDark || !isScrolled
+                        ? "text-white hover:bg-white/15 hover:text-white"
+                        : "text-foreground hover:bg-black/5 hover:text-foreground"
+                    }`}
+                  >
+                    <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+                    Sign In
+                  </Button>
                 )}
 
                 {/* Mobile Menu Trigger */}
                 <button
-                  className={`p-1.5 md:hidden ${
+                  className={`p-1.5 lg:hidden ${
                     isMobileMenuOpen || isDark || !isScrolled
                       ? "text-white"
                       : "text-foreground"
@@ -541,8 +526,8 @@ const Navigation = ({
                 initial={{ opacity: 0, clipPath: "inset(0 0 100% 0)" }}
                 animate={{ opacity: 1, clipPath: "inset(0 0 0% 0)" }}
                 exit={{ opacity: 0, clipPath: "inset(0 0 100% 0)" }}
-                transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-                className={`md:hidden mt-4 pb-4 -mx-4 px-4 rounded-b-xl border-t border-white/10 ${
+                transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                className={`lg:hidden mt-4 pb-4 -mx-4 px-4 rounded-b-xl border-t border-white/10 ${
                   isDark || !isScrolled ? "bg-foreground" : "bg-card"
                 }`}
               >
@@ -586,27 +571,18 @@ const Navigation = ({
                   />
                 </form>
 
-                {navItems.map((item) =>
-                  item.isRoute ? (
-                    <Link
+                <div className="divide-y divide-white/10">
+                  {navLinks.map((item) => (
+                    <button
                       key={item.label}
-                      to={item.href}
-                      className="block py-2.5 text-xs uppercase tracking-wider font-normal text-white hover:opacity-80"
-                      onClick={() => setIsMobileMenuOpen(false)}
+                      type="button"
+                      onClick={() => scrollToSection(item.targetId)}
+                      className="block w-full text-left py-2.5 text-xs uppercase tracking-wider font-normal text-white hover:opacity-80"
                     >
                       {item.label}
-                    </Link>
-                  ) : (
-                    <a
-                      key={item.label}
-                      href={item.href}
-                      className="block py-2.5 text-xs uppercase tracking-wider font-normal text-white hover:opacity-80"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      {item.label}
-                    </a>
-                  )
-                )}
+                    </button>
+                  ))}
+                </div>
 
                 <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/10">
                   <button
@@ -658,25 +634,31 @@ const Navigation = ({
                       Profile
                     </button>
                   ) : (
-                    <Link
-                      to="/auth"
-                      onClick={() => setIsMobileMenuOpen(false)}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        if (onOpenAuth) onOpenAuth();
+                      }}
                       className="flex items-center justify-center gap-1.5 py-2.5 rounded-full text-[11px] uppercase tracking-wider font-normal bg-white/10 text-white border border-white/20"
                     >
                       <UserPlus className="h-3.5 w-3.5" />
-                      Sign Up
-                    </Link>
+                      Sign In
+                    </button>
                   )}
                 </div>
 
-                {user && isAdmin && (
-                  <Link
-                    to="/admin"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="block w-full mt-2 text-center py-2 rounded-full text-[11px] uppercase tracking-wider text-primary bg-primary/10 border border-primary/20"
+                {user && isAdmin && onOpenAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      onOpenAdmin();
+                    }}
+                    className="block w-full mt-2 text-center py-2 rounded-full text-[11px] uppercase tracking-wider text-primary bg-primary/10 border border-primary/20 font-medium"
                   >
                     Admin Dashboard
-                  </Link>
+                  </button>
                 )}
 
                 {user && (
@@ -706,4 +688,3 @@ const Navigation = ({
 };
 
 export default Navigation;
-

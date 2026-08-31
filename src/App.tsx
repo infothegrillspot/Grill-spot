@@ -2,21 +2,21 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
-import LocationDetail from "./pages/LocationDetail";
-import Contact from "./pages/Contact";
-import Locations from "./pages/Locations";
-import About from "./pages/About";
-import Admin from "./pages/Admin";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
 import ScrollToTop from "./components/ScrollToTop";
 import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from "./context/AuthContext";
 import { CartDrawer } from "./components/CartDrawer";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60 * 5,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -29,15 +29,10 @@ const App = () => (
           <BrowserRouter>
             <ScrollToTop />
             <Routes>
+              {/* Single Page Root Application - No sub-routes */}
               <Route path="/" element={<Index />} />
-              <Route path="/locations" element={<Locations />} />
-              <Route path="/location/:id" element={<LocationDetail />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/contact" element={<Contact />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/admin" element={<Admin />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
+              {/* Redirect any legacy sub-routes or unknown URLs directly to root */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>
         </CartProvider>

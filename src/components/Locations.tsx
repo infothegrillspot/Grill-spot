@@ -1,14 +1,17 @@
 import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
 import { useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { UtensilsCrossed, Star, ArrowRight } from "lucide-react";
+import { UtensilsCrossed, Star, ArrowRight, Flame } from "lucide-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { getFeaturedLocations } from "@/data/locations";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-const Locations = () => {
+interface LocationsProps {
+  onSelectDish?: (dishId: string) => void;
+}
+
+const Locations = ({ onSelectDish }: LocationsProps) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, amount: 0.2 });
   const isMobile = useIsMobile();
@@ -23,7 +26,10 @@ const Locations = () => {
   };
 
   const renderCard = (location: ReturnType<typeof getFeaturedLocations>[number]) => (
-    <Link to={`/location/${location.id}`} className="block">
+    <div
+      onClick={() => onSelectDish && onSelectDish(location.id)}
+      className="block cursor-pointer text-left"
+    >
       <div className="relative h-48 overflow-hidden">
         <img src={location.image} alt={location.name} className="w-full h-full object-cover" loading="lazy" />
         <div className="absolute top-3 right-3 bg-card/95 backdrop-blur-sm px-2 py-1 rounded-md flex items-center gap-1">
@@ -53,11 +59,11 @@ const Locations = () => {
           </Button>
         </div>
       </div>
-    </Link>
+    </div>
   );
 
   return (
-    <section id="locations" className="py-32 lg:py-40 bg-background" ref={ref}>
+    <section id="featured" className="py-24 lg:py-32 bg-background" ref={ref}>
       <div className="container mx-auto px-6 lg:px-12">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -66,7 +72,7 @@ const Locations = () => {
           className="text-center mb-16"
         >
           <span className="text-[11px] uppercase tracking-wider text-muted-foreground mb-4 block">
-            Our Menu
+            The Grill Spot Lahore
           </span>
           <h2 className="text-2xl md:text-3xl font-light mb-4 text-foreground tracking-tight">
             Crowd Favorites
@@ -99,8 +105,7 @@ const Locations = () => {
                   transition={{ duration: 0.4, delay: isInView && !hoveredIndex ? index * 0.15 : 0, ease: "easeOut" }}
                   onMouseEnter={() => setHoveredIndex(index)}
                   onMouseLeave={() => setHoveredIndex(null)}
-                  className="absolute w-[320px] cursor-pointer"
-                  style={{ zIndex: isHovered ? 50 : 10 - Math.abs(index - 1) }}
+                  className="absolute w-80 cursor-pointer"
                 >
                   <Card className={`overflow-hidden border border-border bg-card transition-shadow duration-300 ${isHovered ? 'shadow-2xl' : 'shadow-lg'}`}>
                     {renderCard(location)}
