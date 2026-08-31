@@ -5,6 +5,7 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { saveOrderToFirestore } from "@/services/firebaseDb";
 import { createD1Order } from "@/lib/d1Api";
+import { SavedAddressesDialog } from "./SavedAddressesDialog";
 import {
   ShoppingBag,
   Plus,
@@ -19,19 +20,31 @@ import {
   Loader2,
   User,
   Phone,
+  BookMarked,
 } from "lucide-react";
 import { toast } from "sonner";
 
 export const CartDrawer = () => {
-  const { cart, removeFromCart, updateQuantity, clearCart, subtotal, isCartOpen, setIsCartOpen, totalItems } = useCart();
+  const {
+    cart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    subtotal,
+    isCartOpen,
+    setIsCartOpen,
+    totalItems,
+    orderType,
+    setOrderType,
+  } = useCart();
   const { user } = useAuth();
-  const [orderType, setOrderType] = useState<"delivery" | "dinein" | "takeaway">("delivery");
   const [orderSubmitted, setOrderSubmitted] = useState(false);
   const [customerName, setCustomerName] = useState(user?.displayName || "");
   const [customerPhone, setCustomerPhone] = useState(user?.phone || "+92 3");
   const [deliveryAddress, setDeliveryAddress] = useState(user?.address || "");
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAddressPickerOpen, setIsAddressPickerOpen] = useState(false);
 
   const deliveryFee = orderType === "delivery" ? 250 : 0;
   const grandTotal = subtotal + deliveryFee;
@@ -302,15 +315,30 @@ export const CartDrawer = () => {
                   </div>
 
                   {orderType === "delivery" && (
-                    <div className="relative">
-                      <MapPin className="w-3.5 h-3.5 absolute left-3 top-2.5 text-primary" />
-                      <input
-                        type="text"
-                        placeholder="House / Street, Phase / Block, Lahore *"
-                        value={deliveryAddress}
-                        onChange={(e) => setDeliveryAddress(e.target.value)}
-                        className="w-full pl-9 pr-3 py-1.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-normal">
+                          Delivery Address
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddressPickerOpen(true)}
+                          className="text-[11px] text-primary hover:underline flex items-center gap-1 font-medium"
+                        >
+                          <BookMarked className="w-3 h-3" />
+                          Saved Addresses
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <MapPin className="w-3.5 h-3.5 absolute left-3 top-2.5 text-primary" />
+                        <input
+                          type="text"
+                          placeholder="House / Street, Phase / Block, Lahore *"
+                          value={deliveryAddress}
+                          onChange={(e) => setDeliveryAddress(e.target.value)}
+                          className="w-full pl-9 pr-3 py-1.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
                     </div>
                   )}
 
@@ -365,6 +393,11 @@ export const CartDrawer = () => {
           </>
         )}
       </SheetContent>
+      <SavedAddressesDialog
+        open={isAddressPickerOpen}
+        onOpenChange={setIsAddressPickerOpen}
+        onSelectAddress={(addr) => setDeliveryAddress(addr)}
+      />
     </Sheet>
   );
 };

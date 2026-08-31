@@ -1,34 +1,23 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
-import { ArrowLeft, UtensilsCrossed, Star, Clock, ChevronLeft, ChevronRight, Quote, ShoppingBag } from "lucide-react";
-import { format } from "date-fns";
+import { ArrowLeft, UtensilsCrossed, Star, ChevronLeft, ChevronRight, Quote, ShoppingBag, Plus, Minus, Check, ShieldCheck, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { useState } from "react";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { toast } from "sonner";
 import { getLocationById } from "@/data/locations";
 import { useCart } from "@/context/CartContext";
-
-const timeSlots = [
-  "12:00", "12:30", "13:00", "13:30", "14:00",
-  "17:00", "17:30", "18:00", "18:30", "19:00",
-  "19:30", "20:00", "20:30", "21:00", "21:30",
-];
 
 const LocationDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToCart, setIsCartOpen } = useCart();
   const location = id ? getLocationById(id) : null;
-  const [date, setDate] = useState<Date | undefined>(new Date());
-  const [time, setTime] = useState("");
-  const [guests, setGuests] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [specialNote, setSpecialNote] = useState("");
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
   const { scrollY } = useScroll();
@@ -50,12 +39,18 @@ const LocationDetail = () => {
   // Combine main image with detail images for the gallery
   const allImages = [location.image, ...location.images];
 
-  const handleBooking = () => {
-    if (!date || !time || !guests) {
-      toast.error("Please select a date, time, and number of guests");
-      return;
+  const handleAddToCart = () => {
+    for (let i = 0; i < quantity; i++) {
+      addToCart({
+        id: location.id,
+        name: location.name,
+        price: location.price,
+        image: location.image,
+        notes: specialNote || location.features.slice(0, 2).join(", "),
+      });
     }
-    toast.success(`Table reserved! Get ready for ${location.name}.`);
+    toast.success(`Added ${quantity}x ${location.name} to cart!`);
+    setIsCartOpen(true);
   };
 
   const nextImage = () => {
@@ -280,110 +275,95 @@ const LocationDetail = () => {
                 transition={{ duration: 0.6, delay: 0.2 }}
                 className="sticky top-24"
               >
-                <Card className="p-8 border border-border shadow-soft">
-                  <div className="mb-8">
+                <Card className="p-8 border border-border shadow-soft bg-card">
+                  <div className="mb-6">
                     <div className="flex items-baseline gap-2 mb-2">
-                      <span className="text-2xl font-light">Rs. {location.price.toLocaleString()}</span>
-                      <span className="text-xs text-muted-foreground font-light">starting price</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-xs">
-                      <Star className="h-3 w-3 fill-primary text-primary" />
-                      <span className="font-light">{location.rating}</span>
-                      <span className="text-muted-foreground ml-2">Lahore Grill Special</span>
-                    </div>
-                  </div>
-
-                  {/* Add to Cart Quick Action */}
-                  <div className="mb-6 pb-6 border-b border-border">
-                    <Button
-                      type="button"
-                      className="w-full rounded-md text-[11px] uppercase tracking-wider font-normal flex items-center justify-center gap-2 mb-2"
-                      onClick={() => {
-                        addToCart({
-                          id: location.id,
-                          name: location.name,
-                          price: location.price,
-                          image: location.image,
-                          notes: location.features.slice(0, 2).join(", "),
-                        });
-                        setIsCartOpen(true);
-                      }}
-                    >
-                      <ShoppingBag className="w-4 h-4" />
-                      Add to Cart (Rs. {location.price.toLocaleString()})
-                    </Button>
-                    <p className="text-[11px] text-center text-muted-foreground font-light">
-                      Order for takeaway or delivery across Lahore
-                    </p>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div className="text-xs uppercase tracking-wider font-medium text-foreground">
-                      Or Dine-in Table Reservation
-                    </div>
-                    <div>
-                      <Label htmlFor="detail-guests" className="text-[11px] uppercase tracking-wider font-normal mb-3 block">
-                        Guests
-                      </Label>
-                      <Select value={guests} onValueChange={setGuests}>
-                        <SelectTrigger id="detail-guests" className="rounded-md text-sm font-light">
-                          <SelectValue placeholder="Select guests" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">1 Guest</SelectItem>
-                          <SelectItem value="2">2 Guests</SelectItem>
-                          <SelectItem value="3">3 Guests</SelectItem>
-                          <SelectItem value="4">4 Guests</SelectItem>
-                          <SelectItem value="5">5+ Guests</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="detail-time" className="text-[11px] uppercase tracking-wider font-normal mb-3 block">
-                        Time
-                      </Label>
-                      <Select value={time} onValueChange={setTime}>
-                        <SelectTrigger id="detail-time" className="rounded-md text-sm font-light">
-                          <SelectValue placeholder="Select a time" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {timeSlots.map((slot) => (
-                            <SelectItem key={slot} value={slot}>
-                              {slot}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label className="text-[11px] uppercase tracking-wider font-normal mb-3 block">
-                        Date
-                      </Label>
-                      <CalendarComponent
-                        mode="single"
-                        selected={date}
-                        onSelect={setDate}
-                        numberOfMonths={1}
-                        className="rounded-md border-border text-sm pointer-events-auto"
-                        disabled={(d) => d < new Date()}
-                      />
-                      {date && (
-                        <p className="text-xs text-muted-foreground font-light mt-2 text-center">
-                          {format(date, "EEE, MMM d, yyyy")}
-                        </p>
+                      <span className="text-3xl font-light text-foreground">Rs. {(location.price * quantity).toLocaleString()}</span>
+                      {quantity > 1 && (
+                        <span className="text-xs text-muted-foreground font-light">
+                          (Rs. {location.price.toLocaleString()} each)
+                        </span>
                       )}
                     </div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-light">
+                      <Star className="h-3.5 w-3.5 fill-primary text-primary" />
+                      <span className="font-normal text-foreground">{location.rating}</span>
+                      <span>•</span>
+                      <span>Lahore Grill Master Special</span>
+                    </div>
+                  </div>
 
+                  {/* Quantity and Order Options */}
+                  <div className="space-y-5 mb-6">
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider font-normal text-foreground mb-2.5 block">
+                        Quantity
+                      </label>
+                      <div className="flex items-center justify-between border border-border rounded-lg p-1.5 bg-background">
+                        <button
+                          type="button"
+                          onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                          className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="font-medium text-sm text-foreground">{quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => setQuantity((q) => q + 1)}
+                          className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider font-normal text-foreground mb-2 block">
+                        Special Instructions (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Extra garlic sauce, well done patty"
+                        value={specialNote}
+                        onChange={(e) => setSpecialNote(e.target.value)}
+                        className="w-full text-xs px-3.5 py-2.5 rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary text-foreground placeholder:text-muted-foreground/60 font-light"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-2.5 mb-6">
                     <Button
-                      size="default"
-                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-md smooth-hover text-[11px] uppercase tracking-wider font-normal"
-                      onClick={handleBooking}
+                      type="button"
+                      size="lg"
+                      className="w-full rounded-full text-xs uppercase tracking-wider font-normal flex items-center justify-center gap-2 shadow-sm"
+                      onClick={handleAddToCart}
                     >
-                      <Clock className="mr-2 h-4 w-4" />
-                      Reserve a Table
+                      <ShoppingBag className="w-4 h-4" />
+                      Add to Cart • Rs. {(location.price * quantity).toLocaleString()}
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full rounded-full text-[11px] uppercase tracking-wider font-light"
+                      onClick={() => navigate("/locations")}
+                    >
+                      Browse Full Menu
+                    </Button>
+                  </div>
+
+                  {/* Trust Highlights */}
+                  <div className="pt-5 border-t border-border/80 space-y-2 text-xs text-muted-foreground font-light">
+                    <div className="flex items-center gap-2">
+                      <Flame className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                      <span>Wood-fired & charcoal grilled fresh to order</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                      <span>100% Certified Halal, MM Alam Rd Lahore</span>
+                    </div>
                   </div>
                 </Card>
               </motion.div>

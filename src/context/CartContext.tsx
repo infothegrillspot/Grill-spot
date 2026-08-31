@@ -10,6 +10,8 @@ export interface CartItem {
   notes?: string;
 }
 
+export type OrderType = "delivery" | "dinein" | "takeaway";
+
 interface CartContextType {
   cart: CartItem[];
   addToCart: (item: { id: string; name: string; price: number; image: string; notes?: string }, quantity?: number) => void;
@@ -20,6 +22,10 @@ interface CartContextType {
   subtotal: number;
   isCartOpen: boolean;
   setIsCartOpen: (isOpen: boolean) => void;
+  orderType: OrderType;
+  setOrderType: (type: OrderType) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -50,6 +56,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [orderType, setOrderType] = useState<OrderType>("delivery");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     try {
@@ -114,6 +122,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         subtotal,
         isCartOpen,
         setIsCartOpen,
+        orderType,
+        setOrderType,
+        searchQuery,
+        setSearchQuery,
       }}
     >
       {children}
