@@ -31,7 +31,8 @@ import {
 import { toast } from "sonner";
 
 interface MenuManagementProps {
-  menuList: D1MenuItem[];
+  menuList?: D1MenuItem[];
+  menuItems?: D1MenuItem[];
   onRefresh: () => void;
 }
 
@@ -47,7 +48,8 @@ const CATEGORIES = [
 
 const SPICE_LEVELS = ["None", "Mild", "Medium", "Hot", "Extra Spicy (Lahori Heat)"];
 
-export const MenuManagement = ({ menuList, onRefresh }: MenuManagementProps) => {
+export const MenuManagement = ({ menuList, menuItems, onRefresh }: MenuManagementProps) => {
+  const effectiveMenu = menuList || menuItems || [];
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -169,11 +171,11 @@ export const MenuManagement = ({ menuList, onRefresh }: MenuManagementProps) => 
     onRefresh();
   };
 
-  const filteredMenu = menuList.filter((item) => {
+  const filteredMenu = effectiveMenu.filter((item) => {
     const matchesSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchQuery.toLowerCase());
+      (item.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.category || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.description || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCat = selectedCategory === "all" || item.category === selectedCategory;
     return matchesSearch && matchesCat;
   });
@@ -190,7 +192,7 @@ export const MenuManagement = ({ menuList, onRefresh }: MenuManagementProps) => 
             <div className="flex items-center gap-2">
               <h3 className="text-base font-medium text-foreground">Live Menu & Culinary Catalog</h3>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px]">
-                {menuList.length} Total Dishes
+                {effectiveMenu.length} Total Dishes
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground font-light">
@@ -233,10 +235,10 @@ export const MenuManagement = ({ menuList, onRefresh }: MenuManagementProps) => 
                 : "bg-card border border-border text-muted-foreground hover:text-foreground"
             }`}
           >
-            All Items ({menuList.length})
+            All Items ({effectiveMenu.length})
           </button>
           {CATEGORIES.map((cat) => {
-            const count = menuList.filter((m) => m.category === cat).length;
+            const count = effectiveMenu.filter((m) => m.category === cat).length;
             return (
               <button
                 key={cat}

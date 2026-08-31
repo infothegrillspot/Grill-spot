@@ -37,7 +37,9 @@ import {
 import { toast } from "sonner";
 
 interface RiderManagementProps {
-  ridersList: D1Rider[];
+  ridersList?: D1Rider[];
+  riders?: D1Rider[];
+  orders?: unknown[];
   onRefresh: () => void;
 }
 
@@ -57,7 +59,8 @@ const ZONES = [
   "All Lahore Sectors",
 ];
 
-export const RiderManagement = ({ ridersList, onRefresh }: RiderManagementProps) => {
+export const RiderManagement = ({ ridersList, riders, onRefresh }: RiderManagementProps) => {
+  const effectiveRiders = ridersList || riders || [];
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -150,18 +153,18 @@ export const RiderManagement = ({ ridersList, onRefresh }: RiderManagementProps)
     onRefresh();
   };
 
-  const filteredRiders = ridersList.filter((r) => {
+  const filteredRiders = effectiveRiders.filter((r) => {
     const matchesSearch =
-      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.phone.includes(searchQuery) ||
+      (r.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (r.phone || "").includes(searchQuery) ||
       (r.vehiclePlate && r.vehiclePlate.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      r.assignedZone.toLowerCase().includes(searchQuery.toLowerCase());
+      (r.assignedZone || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || r.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const availableCount = ridersList.filter((r) => r.status === "available").length;
-  const deliveringCount = ridersList.filter((r) => r.status === "delivering").length;
+  const availableCount = effectiveRiders.filter((r) => r.status === "available").length;
+  const deliveringCount = effectiveRiders.filter((r) => r.status === "delivering").length;
 
   return (
     <div className="space-y-4">
@@ -214,7 +217,7 @@ export const RiderManagement = ({ ridersList, onRefresh }: RiderManagementProps)
           onChange={(e) => setStatusFilter(e.target.value)}
           className="h-9 px-3 text-xs rounded-md border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
         >
-          <option value="all">All Riders ({ridersList.length})</option>
+          <option value="all">All Riders ({effectiveRiders.length})</option>
           <option value="available">Available ({availableCount})</option>
           <option value="delivering">Out for Delivery ({deliveringCount})</option>
           <option value="on_break">On Break</option>

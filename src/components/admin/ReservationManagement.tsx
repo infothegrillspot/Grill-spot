@@ -26,14 +26,17 @@ import {
 import { toast } from "sonner";
 
 interface ReservationManagementProps {
-  bookingsList: D1Booking[];
+  bookingsList?: D1Booking[];
+  bookings?: D1Booking[];
   onRefresh: () => void;
 }
 
 export const ReservationManagement = ({
   bookingsList,
+  bookings,
   onRefresh,
 }: ReservationManagementProps) => {
+  const effectiveBookings = bookingsList || bookings || [];
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -58,11 +61,11 @@ export const ReservationManagement = ({
     }
   };
 
-  const filtered = bookingsList.filter((b) => {
+  const filtered = effectiveBookings.filter((b) => {
     const matchesSearch =
-      b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.phone.includes(searchQuery) ||
-      b.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (b.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (b.phone || "").includes(searchQuery) ||
+      (b.email || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (b.area && b.area.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesStatus = statusFilter === "all" || b.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -86,7 +89,7 @@ export const ReservationManagement = ({
           onChange={(e) => setStatusFilter(e.target.value)}
           className="h-9 px-3 text-xs rounded-md border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
         >
-          <option value="all">All Bookings ({bookingsList.length})</option>
+          <option value="all">All Bookings ({effectiveBookings.length})</option>
           <option value="confirmed">Confirmed</option>
           <option value="seated">Seated</option>
           <option value="completed">Completed</option>

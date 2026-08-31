@@ -39,7 +39,8 @@ import {
 import { toast } from "sonner";
 
 interface StaffManagementProps {
-  staffList: D1Staff[];
+  staffList?: D1Staff[];
+  staff?: D1Staff[];
   onRefresh: () => void;
 }
 
@@ -57,7 +58,8 @@ const ROLES = [
 const SHIFTS = ["Morning (10:00 AM - 6:00 PM)", "Evening (5:00 PM - 1:00 AM)", "Night (8:00 PM - 4:00 AM)", "Full Day"];
 const BRANCHES = ["Gulberg III (MM Alam)", "DHA Phase 5 (Bedian)", "Cantt Mall Road", "Model Town Link Rd"];
 
-export const StaffManagement = ({ staffList, onRefresh }: StaffManagementProps) => {
+export const StaffManagement = ({ staffList, staff, onRefresh }: StaffManagementProps) => {
+  const effectiveStaff = staffList || staff || [];
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -158,17 +160,17 @@ export const StaffManagement = ({ staffList, onRefresh }: StaffManagementProps) 
     onRefresh();
   };
 
-  const filteredStaff = staffList.filter((s) => {
+  const filteredStaff = effectiveStaff.filter((s) => {
     const matchesSearch =
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.branch.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.role || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.branch || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (s.phone && s.phone.includes(searchQuery));
-    const matchesRole = roleFilter === "all" || s.role.toLowerCase().includes(roleFilter.toLowerCase());
+    const matchesRole = roleFilter === "all" || (s.role || "").toLowerCase().includes(roleFilter.toLowerCase());
     return matchesSearch && matchesRole;
   });
 
-  const onDutyCount = staffList.filter((s) => s.status === "on_duty" || s.status === "active").length;
+  const onDutyCount = effectiveStaff.filter((s) => s.status === "on_duty" || s.status === "active").length;
 
   return (
     <div className="space-y-4">
@@ -218,7 +220,7 @@ export const StaffManagement = ({ staffList, onRefresh }: StaffManagementProps) 
           onChange={(e) => setRoleFilter(e.target.value)}
           className="h-9 px-3 text-xs rounded-md border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
         >
-          <option value="all">All Staff Roles ({staffList.length})</option>
+          <option value="all">All Staff Roles ({effectiveStaff.length})</option>
           <option value="Chef">Chefs & Grill Masters</option>
           <option value="Manager">Managers</option>
           <option value="Cashier">Cashiers & Hosts</option>

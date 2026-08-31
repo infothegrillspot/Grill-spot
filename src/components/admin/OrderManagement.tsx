@@ -46,16 +46,22 @@ import {
 import { toast } from "sonner";
 
 interface OrderManagementProps {
-  ordersList: D1Order[];
-  ridersList: D1Rider[];
+  ordersList?: D1Order[];
+  ridersList?: D1Rider[];
+  orders?: D1Order[];
+  riders?: D1Rider[];
   onRefresh: () => void;
 }
 
 export const OrderManagement = ({
   ordersList,
   ridersList,
+  orders,
+  riders,
   onRefresh,
 }: OrderManagementProps) => {
+  const effectiveOrders = ordersList || orders || [];
+  const effectiveRiders = ridersList || riders || [];
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<D1Order | null>(null);
@@ -67,7 +73,7 @@ export const OrderManagement = ({
   const openAllocateModal = (order: D1Order) => {
     setSelectedOrder(order);
     // Auto-select first available rider if possible
-    const firstAvail = ridersList.find((r) => r.status === "available") || ridersList[0];
+    const firstAvail = effectiveRiders.find((r) => r.status === "available") || effectiveRiders[0];
     setSelectedRiderId(firstAvail?.id || "");
     setIsAllocateModalOpen(true);
   };
@@ -78,7 +84,7 @@ export const OrderManagement = ({
       return;
     }
 
-    const rider = ridersList.find((r) => r.id === selectedRiderId);
+    const rider = effectiveRiders.find((r) => r.id === selectedRiderId);
     if (!rider) {
       toast.error("Rider not found");
       return;
@@ -148,20 +154,20 @@ export const OrderManagement = ({
     toast.success(`Copied ${label} to clipboard!`);
   };
 
-  const filteredOrders = ordersList.filter((order) => {
+  const filteredOrders = effectiveOrders.filter((order) => {
     const matchesSearch =
-      order.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.phone.includes(searchQuery) ||
-      order.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (order.customerName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (order.phone || "").includes(searchQuery) ||
+      (order.address || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (order.id || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (order.riderName && order.riderName.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const pendingCount = ordersList.filter((o) => o.status === "pending").length;
-  const deliveringCount = ordersList.filter((o) => o.status === "out_for_delivery").length;
+  const pendingCount = effectiveOrders.filter((o) => o.status === "pending").length;
+  const deliveringCount = effectiveOrders.filter((o) => o.status === "out_for_delivery").length;
 
   return (
     <div className="space-y-4">
@@ -220,11 +226,11 @@ export const OrderManagement = ({
         {/* Status Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
           {[
-            { id: "all", label: `All Orders (${ordersList.length})` },
-            { id: "pending", label: `Pending Dispatch (${ordersList.filter((o) => o.status === "pending").length})` },
-            { id: "preparing", label: `Preparing in Kitchen (${ordersList.filter((o) => o.status === "preparing").length})` },
-            { id: "out_for_delivery", label: `Out for Delivery (${ordersList.filter((o) => o.status === "out_for_delivery").length})` },
-            { id: "delivered", label: `Delivered (${ordersList.filter((o) => o.status === "delivered" || o.status === "completed").length})` },
+            { id: "all", label: `All Orders (${effectiveOrders.length})` },
+            { id: "pending", label: `Pending Dispatch (${effectiveOrders.filter((o) => o.status === "pending").length})` },
+            { id: "preparing", label: `Preparing in Kitchen (${effectiveOrders.filter((o) => o.status === "preparing").length})` },
+            { id: "out_for_delivery", label: `Out for Delivery (${effectiveOrders.filter((o) => o.status === "out_for_delivery").length})` },
+            { id: "delivered", label: `Delivered (${effectiveOrders.filter((o) => o.status === "delivered" || o.status === "completed").length})` },
           ].map((tab) => (
             <button
               key={tab.id}
