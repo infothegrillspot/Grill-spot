@@ -4,7 +4,6 @@ import Hero from "@/components/Hero";
 import Locations from "@/components/Locations";
 import { MenuSection } from "@/components/MenuSection";
 import Experience from "@/components/Experience";
-import Booking from "@/components/Booking";
 import { AboutSection } from "@/components/AboutSection";
 import { ContactSection } from "@/components/ContactSection";
 import Footer from "@/components/Footer";
@@ -37,11 +36,6 @@ const Index = () => {
 
       {/* The Charcoal Way Experience */}
       <Experience />
-
-      {/* Table Reservation Section */}
-      <section id="booking" className="py-24 lg:py-32 bg-background border-t border-border">
-        <Booking />
-      </section>
 
       {/* About & Craft Story */}
       <AboutSection />

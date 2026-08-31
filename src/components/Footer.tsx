@@ -64,15 +64,6 @@ const Footer = ({ onOpenAdmin }: FooterProps) => {
               <li>
                 <button
                   type="button"
-                  onClick={() => scrollTo("booking")}
-                  className="text-background/70 hover:text-background transition-colors text-xs font-light text-left"
-                >
-                  Book a Table
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
                   onClick={() => scrollTo("about")}
                   className="text-background/70 hover:text-background transition-colors text-xs font-light text-left"
                 >

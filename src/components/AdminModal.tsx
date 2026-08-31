@@ -209,9 +209,9 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-7xl w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-0 border-border bg-card overflow-hidden">
+      <DialogContent className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen max-w-none h-screen max-h-none rounded-none sm:rounded-none flex flex-col p-0 border-0 bg-background overflow-hidden z-[100] focus:outline-none">
         {/* Header Bar */}
-        <div className="p-4 sm:p-6 border-b border-border bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-shrink-0">
+        <div className="px-4 py-3 sm:px-8 sm:py-4 border-b border-border bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold shadow-md">
               <ChefHat className="w-5 h-5" />
@@ -224,7 +224,7 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground font-light">
-                Manage live orders, allocate delivery riders, edit menu, and monitor reservations
+                Live Kitchen & Dispatch command center — Orders, Menu, Delivery, Bookings, and Staff
               </p>
             </div>
           </div>
@@ -244,15 +244,15 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
               variant="default"
               size="sm"
               onClick={onClose}
-              className="text-xs h-8 rounded-full bg-primary text-primary-foreground"
+              className="text-xs h-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              Close Portal
+              Exit Fullscreen Admin
             </Button>
           </div>
         </div>
 
         {/* Top Metric Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 sm:px-6 bg-muted/20 border-b border-border flex-shrink-0">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-4 py-3 sm:px-8 bg-muted/20 border-b border-border flex-shrink-0">
           <div className="p-3 bg-card rounded-xl border border-border flex items-center gap-3">
             <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500">
               <ShoppingBag className="w-4 h-4" />
@@ -295,7 +295,7 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-1 px-4 sm:px-6 py-2 border-b border-border bg-card/60 overflow-x-auto flex-shrink-0">
+        <div className="flex items-center gap-1.5 px-4 sm:px-8 py-2.5 border-b border-border bg-card/70 overflow-x-auto flex-shrink-0 scrollbar-none">
           <Button
             variant={activeTab === "orders" ? "default" : "ghost"}
             size="sm"
@@ -303,7 +303,7 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
             className="text-xs h-8 rounded-full gap-1.5 font-medium whitespace-nowrap"
           >
             <ShoppingBag className="w-3.5 h-3.5" />
-            Orders ({d1Orders.length})
+            Live Orders ({d1Orders.length})
           </Button>
 
           <Button
@@ -313,7 +313,7 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
             className="text-xs h-8 rounded-full gap-1.5 font-medium whitespace-nowrap"
           >
             <UtensilsCrossed className="w-3.5 h-3.5" />
-            Menu Management ({d1Menu.length || 18})
+            Menu Catalog ({d1Menu.length || 18})
           </Button>
 
           <Button
@@ -333,7 +333,7 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
             className="text-xs h-8 rounded-full gap-1.5 font-medium whitespace-nowrap"
           >
             <CalendarDays className="w-3.5 h-3.5" />
-            Reservations ({d1Bookings.length})
+            Table Reservations ({d1Bookings.length})
           </Button>
 
           <Button
@@ -343,7 +343,7 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
             className="text-xs h-8 rounded-full gap-1.5 font-medium whitespace-nowrap"
           >
             <ChefHat className="w-3.5 h-3.5" />
-            Staff ({d1Staff.length})
+            Kitchen Staff ({d1Staff.length})
           </Button>
 
           <Button
@@ -358,11 +358,13 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
         </div>
 
         {/* Tab Content Body (Scrollable) */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-muted/10">
+        <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-6 bg-muted/10">
           {activeTab === "orders" && (
             <OrderManagement
               orders={d1Orders}
+              ordersList={d1Orders}
               riders={d1Riders}
+              ridersList={d1Riders}
               onRefresh={loadD1Data}
             />
           )}

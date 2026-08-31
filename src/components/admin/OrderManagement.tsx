@@ -490,13 +490,13 @@ export const OrderManagement = ({
               {/* Rider Selection List */}
               <div className="space-y-2">
                 <label className="block text-muted-foreground text-xs">Choose Fleet Rider:</label>
-                {ridersList.length === 0 ? (
+                {effectiveRiders.length === 0 ? (
                   <p className="text-amber-500 text-xs">
                     No riders registered yet. Please add a rider in the "Riders Fleet" tab first.
                   </p>
                 ) : (
                   <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {ridersList.map((rider) => {
+                    {effectiveRiders.map((rider) => {
                       const isSelected = selectedRiderId === rider.id;
                       const isAvail = rider.status === "available";
                       return (
