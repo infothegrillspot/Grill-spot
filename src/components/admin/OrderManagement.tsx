@@ -6,6 +6,7 @@ import {
   updateD1OrderStatus,
   deleteD1Order,
 } from "@/lib/d1Api";
+import { updateOrderInFirestore, updateOrderStatusInFirestore } from "@/services/firebaseDb";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,6 +94,14 @@ export const OrderManagement = ({
         "out_for_delivery"
       );
 
+      // Also update Firestore real-time document
+      await updateOrderInFirestore(selectedOrder.id, {
+        status: "delivering",
+        riderId: rider.id,
+        riderName: rider.name,
+        riderPhone: rider.phone,
+      }).catch((e) => console.warn("Firestore rider sync warning:", e));
+
       if (success) {
         toast.success(`Order ${selectedOrder.id} assigned to ${rider.name}!`);
         setIsAllocateModalOpen(false);
@@ -111,6 +120,11 @@ export const OrderManagement = ({
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     try {
       const ok = await updateD1OrderStatus(orderId, newStatus);
+      // Map status for Firestore
+      type FsStatus = "pending" | "preparing" | "delivering" | "out_for_delivery" | "completed" | "delivered" | "cancelled";
+      const fsStatus: FsStatus = (newStatus === "out_for_delivery" ? "delivering" : newStatus === "delivered" ? "completed" : newStatus) as FsStatus;
+      await updateOrderStatusInFirestore(orderId, fsStatus).catch((e) => console.warn("Firestore status sync warning:", e));
+
       if (ok) {
         toast.success(`Order ${orderId} updated to ${newStatus.replace("_", " ")}`);
         onRefresh();

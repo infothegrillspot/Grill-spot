@@ -39,27 +39,39 @@ export const OrderHistoryDialog = ({ open, onOpenChange }: OrderHistoryDialogPro
     let isMounted = true;
     setLoading(true);
 
-    const loadOrders = async () => {
+    const getLocalOrderIds = (): string[] => {
       try {
-        // 1. Try D1 API for this user
-        const d1Orders = await fetchD1Orders(user?.uid);
-        if (isMounted && d1Orders && d1Orders.length > 0) {
-          setOrders(d1Orders);
-          setLoading(false);
-          return;
+        const stored = JSON.parse(localStorage.getItem("grillspot_guest_orders") || "[]");
+        return Array.isArray(stored) ? stored : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const loadOrders = async () => {
+      const localIds = getLocalOrderIds();
+      let d1Fetched: D1Order[] = [];
+
+      try {
+        if (user?.uid) {
+          d1Fetched = await fetchD1Orders(user.uid);
         }
       } catch (err) {
         console.warn("Could not fetch D1 orders:", err);
       }
 
-      // 2. Fallback to Firestore real-time subscription
+      // Firestore real-time subscription with strict user isolation
       const unsubscribe = subscribeToOrders((fsOrders: OrderRecord[]) => {
         if (!isMounted) return;
-        
-        // Filter by user ID if logged in, otherwise show latest
-        const userOrders = user?.uid 
-          ? fsOrders.filter((o) => o.userId === user.uid || (o.customerName && o.customerName === user.displayName))
-          : fsOrders.slice(0, 5);
+
+        // Strictly filter orders to only this customer
+        const userOrders = fsOrders.filter((o) => {
+          if (!o || !o.id) return false;
+          if (user?.uid && o.userId === user.uid) return true;
+          if (user?.email && o.customerEmail && o.customerEmail.toLowerCase() === user.email.toLowerCase()) return true;
+          if (localIds.includes(o.id)) return true;
+          return false;
+        });
 
         const mapped: D1Order[] = userOrders.map((o) => ({
           id: o.id || "order-temp",
@@ -73,6 +85,8 @@ export const OrderHistoryDialog = ({ open, onOpenChange }: OrderHistoryDialogPro
           address: o.address || "",
           specialInstructions: o.specialInstructions,
           status: (o.status === "delivering" ? "out_for_delivery" : o.status === "completed" ? "delivered" : o.status) as D1Order["status"],
+          riderName: o.riderName,
+          riderPhone: o.riderPhone,
           items: o.items.map((it) => ({
             id: it.id,
             name: it.name,
@@ -83,7 +97,16 @@ export const OrderHistoryDialog = ({ open, onOpenChange }: OrderHistoryDialogPro
           createdAt: typeof o.createdAt === "string" ? o.createdAt : new Date().toISOString(),
         }));
 
-        setOrders(mapped);
+        // Merge D1 fetched orders and Firestore live orders
+        const map = new Map<string, D1Order>();
+        d1Fetched.forEach((d) => map.set(d.id, d));
+        mapped.forEach((m) => map.set(m.id, { ...(map.get(m.id) || {}), ...m }));
+
+        const finalOrders = Array.from(map.values()).sort(
+          (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+        );
+
+        setOrders(finalOrders);
         setLoading(false);
       });
 

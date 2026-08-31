@@ -50,9 +50,68 @@ import { RiderManagement } from "@/components/admin/RiderManagement";
 import { MenuManagement } from "@/components/admin/MenuManagement";
 import { OrderManagement } from "@/components/admin/OrderManagement";
 import { ReservationManagement } from "@/components/admin/ReservationManagement";
+import { subscribeToOrders, subscribeToBookings, OrderRecord, BookingRecord } from "@/services/firebaseDb";
 import { toast } from "sonner";
 
 type AdminTab = "orders" | "menu" | "staff" | "riders" | "reservations" | "customers" | "database";
+
+// Helper to merge D1 & Firestore orders seamlessly
+const mergeOrdersData = (d1List: D1Order[], fsList: OrderRecord[]): D1Order[] => {
+  const map = new Map<string, D1Order>();
+
+  // 1. Add all D1 orders
+  d1List.forEach((o) => {
+    if (o && o.id) {
+      map.set(o.id, o);
+    }
+  });
+
+  // 2. Merge Firestore orders (realtime live stream)
+  fsList.forEach((fo) => {
+    if (!fo || !fo.id) return;
+    const existing = map.get(fo.id);
+    const converted: D1Order = {
+      id: fo.id,
+      userId: fo.userId || null,
+      customerName: fo.customerName || "Customer",
+      phone: fo.phone || "",
+      orderType: (fo.orderType === "takeaway" ? "takeaway" : fo.orderType === "delivery" ? "delivery" : "dine_in"),
+      subtotal: Number(fo.subtotal || 0),
+      deliveryFee: Number(fo.deliveryFee || 0),
+      grandTotal: Number(fo.grandTotal || 0),
+      address: fo.address || "",
+      specialInstructions: fo.specialInstructions || "",
+      status: (fo.status === "delivering" ? "out_for_delivery" : fo.status === "completed" ? "delivered" : fo.status) as D1Order["status"],
+      items: fo.items?.map((it) => ({
+        id: it.id,
+        name: it.name,
+        price: it.price,
+        quantity: it.quantity,
+        notes: it.notes,
+      })) || [],
+      riderId: fo.riderId || existing?.riderId,
+      riderName: fo.riderName || existing?.riderName,
+      riderPhone: fo.riderPhone || existing?.riderPhone,
+      createdAt: typeof fo.createdAt === "string" ? fo.createdAt : new Date().toISOString(),
+    };
+
+    if (!existing) {
+      map.set(fo.id, converted);
+    } else {
+      map.set(fo.id, {
+        ...converted,
+        ...existing,
+        status: existing.status || converted.status,
+      });
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) => {
+    const tA = new Date(a.createdAt || 0).getTime();
+    const tB = new Date(b.createdAt || 0).getTime();
+    return tB - tA;
+  });
+};
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -94,7 +153,13 @@ const Admin = () => {
         checkD1Health(),
       ]);
 
-      setD1Orders(orders);
+      setD1Orders((prev) => {
+        // Merge fetched D1 orders with current state
+        const map = new Map<string, D1Order>();
+        prev.forEach((o) => map.set(o.id, o));
+        orders.forEach((o) => map.set(o.id, { ...(map.get(o.id) || {}), ...o }));
+        return Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      });
       setD1Bookings(bookings);
       setD1Users(users);
       setD1Staff(staff);
@@ -104,7 +169,6 @@ const Admin = () => {
       setD1Health(health);
     } catch (err) {
       console.error("Failed to load D1 admin data:", err);
-      toast.error("Network notice: refreshed local storage cache");
     } finally {
       setIsRefreshing(false);
     }
@@ -112,8 +176,44 @@ const Admin = () => {
 
   useEffect(() => {
     loadD1Data();
-    const interval = setInterval(loadD1Data, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(loadD1Data, 20000);
+
+    // Live Real-Time Firestore Synchronization
+    const unsubOrders = subscribeToOrders((fsOrders) => {
+      setD1Orders((prev) => mergeOrdersData(prev, fsOrders));
+    });
+
+    const unsubBookings = subscribeToBookings((fsBookings) => {
+      setD1Bookings((prev) => {
+        const map = new Map<string, D1Booking>();
+        prev.forEach((b) => map.set(b.id, b));
+        fsBookings.forEach((fb) => {
+          if (!fb.id) return;
+          const bookingStatus = (fb.status === "cancelled" ? "cancelled" : fb.status === "pending" ? "pending" : "confirmed") as D1Booking["status"];
+          map.set(fb.id, {
+            id: fb.id,
+            userId: fb.userId || null,
+            name: fb.name,
+            email: fb.email,
+            phone: fb.phone,
+            guests: fb.guests,
+            date: fb.date,
+            time: fb.time,
+            area: fb.area,
+            specialRequests: fb.notes,
+            status: bookingStatus,
+            createdAt: typeof fb.createdAt === "string" ? fb.createdAt : new Date().toISOString(),
+          });
+        });
+        return Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      });
+    });
+
+    return () => {
+      clearInterval(interval);
+      unsubOrders();
+      unsubBookings();
+    };
   }, []);
 
   const totalRevenue = d1Stats?.totalRevenue || d1Orders.reduce((sum, o) => sum + (Number(o.grandTotal) || 0), 0);

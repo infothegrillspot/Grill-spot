@@ -4,6 +4,7 @@ import {
 import { 
   collection, 
   addDoc, 
+  setDoc,
   getDocs, 
   updateDoc, 
   doc, 
@@ -33,15 +34,19 @@ export interface BookingRecord {
 export interface OrderRecord {
   id?: string;
   items: Array<{ id: string; name: string; price: number; quantity: number; notes?: string }>;
-  orderType: "dinein" | "takeaway" | "delivery";
+  orderType: "dinein" | "takeaway" | "delivery" | "dine_in" | "pickup";
   subtotal: number;
   deliveryFee: number;
   grandTotal: number;
   customerName?: string;
+  customerEmail?: string;
   phone?: string;
   address?: string;
   specialInstructions?: string;
-  status: "pending" | "preparing" | "delivering" | "completed" | "cancelled";
+  status: "pending" | "preparing" | "delivering" | "out_for_delivery" | "completed" | "delivered" | "cancelled";
+  riderId?: string;
+  riderName?: string;
+  riderPhone?: string;
   createdAt?: string | Timestamp;
   userId?: string;
 }
@@ -51,8 +56,16 @@ const ORDERS_COLLECTION = "orders";
 
 // ---------------- BOOKINGS ----------------
 
-export async function saveBookingToFirestore(booking: Omit<BookingRecord, "id">): Promise<string> {
+export async function saveBookingToFirestore(booking: Omit<BookingRecord, "id"> & { id?: string }): Promise<string> {
   try {
+    if (booking.id) {
+      const docRef = doc(db, BOOKINGS_COLLECTION, booking.id);
+      await setDoc(docRef, {
+        ...booking,
+        createdAt: serverTimestamp(),
+      }, { merge: true });
+      return booking.id;
+    }
     const docRef = await addDoc(collection(db, BOOKINGS_COLLECTION), {
       ...booking,
       createdAt: serverTimestamp(),
@@ -60,8 +73,7 @@ export async function saveBookingToFirestore(booking: Omit<BookingRecord, "id">)
     return docRef.id;
   } catch (error) {
     console.warn("Firestore save booking error, using local fallback:", error);
-    // Return random ID if offline
-    return "local-" + Math.random().toString(36).substring(2, 9);
+    return booking.id || "local-" + Math.random().toString(36).substring(2, 9);
   }
 }
 
@@ -116,16 +128,19 @@ export async function deleteBookingFromFirestore(bookingId: string) {
 
 // ---------------- ORDERS ----------------
 
-export async function saveOrderToFirestore(order: Omit<OrderRecord, "id">): Promise<string> {
+export async function saveOrderToFirestore(order: OrderRecord): Promise<string> {
   try {
-    const docRef = await addDoc(collection(db, ORDERS_COLLECTION), {
+    const orderId = order.id || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const docRef = doc(db, ORDERS_COLLECTION, orderId);
+    await setDoc(docRef, {
       ...order,
+      id: orderId,
       createdAt: serverTimestamp(),
-    });
-    return docRef.id;
+    }, { merge: true });
+    return orderId;
   } catch (error) {
     console.warn("Firestore save order error, using local fallback:", error);
-    return "order-" + Math.random().toString(36).substring(2, 9);
+    return order.id || "order-" + Math.random().toString(36).substring(2, 9);
   }
 }
 
@@ -138,15 +153,19 @@ export function subscribeToOrders(callback: (orders: OrderRecord[]) => void) {
         return {
           id: docSnap.id,
           items: data.items || [],
-          orderType: data.orderType || "dinein",
+          orderType: data.orderType || "delivery",
           subtotal: Number(data.subtotal || 0),
           deliveryFee: Number(data.deliveryFee || 0),
           grandTotal: Number(data.grandTotal || 0),
           customerName: data.customerName || "Customer",
+          customerEmail: data.customerEmail || "",
           phone: data.phone || "",
           address: data.address || "",
           specialInstructions: data.specialInstructions || "",
           status: data.status || "pending",
+          riderId: data.riderId,
+          riderName: data.riderName,
+          riderPhone: data.riderPhone,
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt,
           userId: data.userId,
         };
@@ -167,5 +186,14 @@ export async function updateOrderStatusInFirestore(orderId: string, status: Orde
     await updateDoc(docRef, { status });
   } catch (error) {
     console.warn("Could not update order in Firestore:", error);
+  }
+}
+
+export async function updateOrderInFirestore(orderId: string, updates: Partial<OrderRecord>) {
+  try {
+    const docRef = doc(db, ORDERS_COLLECTION, orderId);
+    await updateDoc(docRef, updates as Record<string, unknown>);
+  } catch (error) {
+    console.warn("Could not update order details in Firestore:", error);
   }
 }

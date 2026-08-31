@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/context/CartContext";
@@ -37,7 +37,7 @@ export const CartDrawer = () => {
     orderType,
     setOrderType,
   } = useCart();
-  const { user } = useAuth();
+  const { user, updateUserProfile } = useAuth();
   const [orderSubmitted, setOrderSubmitted] = useState(false);
   const [customerName, setCustomerName] = useState(user?.displayName || "");
   const [customerPhone, setCustomerPhone] = useState(user?.phone || "+92 3");
@@ -45,6 +45,21 @@ export const CartDrawer = () => {
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddressPickerOpen, setIsAddressPickerOpen] = useState(false);
+
+  // Sync profile details whenever user logs in or updates profile
+  useEffect(() => {
+    if (user) {
+      if (user.displayName && (!customerName || customerName === "Guest Customer")) {
+        setCustomerName(user.displayName);
+      }
+      if (user.phone && (!customerPhone || customerPhone === "+92 3")) {
+        setCustomerPhone(user.phone);
+      }
+      if (user.address && !deliveryAddress) {
+        setDeliveryAddress(user.address);
+      }
+    }
+  }, [user, isCartOpen]);
 
   const deliveryFee = orderType === "delivery" ? 250 : 0;
   const grandTotal = subtotal + deliveryFee;
@@ -66,8 +81,11 @@ export const CartDrawer = () => {
     }
 
     setIsSubmitting(true);
+    const orderId = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
     try {
       const orderPayload = {
+        id: orderId,
         items: cart.map((item) => ({
           id: item.id,
           name: item.name,
@@ -80,6 +98,7 @@ export const CartDrawer = () => {
         deliveryFee,
         grandTotal,
         customerName: customerName.trim(),
+        customerEmail: user?.email || undefined,
         phone: customerPhone.trim(),
         address: orderType === "delivery" ? deliveryAddress.trim() : "Dine-in / Pickup (MM Alam Road Branch)",
         specialInstructions,
@@ -90,12 +109,35 @@ export const CartDrawer = () => {
       // 1. Save to Cloudflare D1 SQL database
       await createD1Order(orderPayload).catch((e) => console.warn("D1 order sync warning:", e));
 
-      // 2. Save to Firestore
+      // 2. Save to Firestore database
       await saveOrderToFirestore(orderPayload).catch((e) => console.warn("Firestore order sync warning:", e));
+
+      // 3. Save order ID to local storage so this user can always track this specific order
+      try {
+        const stored = JSON.parse(localStorage.getItem("grillspot_guest_orders") || "[]");
+        const updated = Array.from(new Set([orderId, ...(Array.isArray(stored) ? stored : [])]));
+        localStorage.setItem("grillspot_guest_orders", JSON.stringify(updated));
+      } catch (e) {
+        console.warn("Could not save to localStorage:", e);
+      }
+
+      // 4. If logged in, update customer profile with new phone/address for future orders
+      if (user && updateUserProfile) {
+        const profileUpdates: { phone?: string; address?: string } = {};
+        if (customerPhone.trim() && customerPhone.trim() !== user.phone) {
+          profileUpdates.phone = customerPhone.trim();
+        }
+        if (orderType === "delivery" && deliveryAddress.trim() && deliveryAddress.trim() !== user.address) {
+          profileUpdates.address = deliveryAddress.trim();
+        }
+        if (Object.keys(profileUpdates).length > 0) {
+          updateUserProfile(profileUpdates).catch((e) => console.warn("Auto profile update skipped:", e));
+        }
+      }
 
       setOrderSubmitted(true);
       toast.success("Order Placed Successfully!", {
-        description: `Your order for Rs. ${grandTotal.toLocaleString()} was sent to the kitchen and queued for rider dispatch.`,
+        description: `Order #${orderId.slice(-6).toUpperCase()} for Rs. ${grandTotal.toLocaleString()} was received by the kitchen.`,
       });
     } catch (err) {
       console.warn("Order placement fallback:", err);
