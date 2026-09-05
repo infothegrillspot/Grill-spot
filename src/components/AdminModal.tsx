@@ -24,7 +24,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
 import {
   fetchD1Orders,
@@ -53,18 +52,52 @@ import { toast } from "sonner";
 
 type AdminTab = "orders" | "menu" | "staff" | "riders" | "reservations" | "customers" | "database";
 
+const normalizeOrderItemsList = (items: unknown, itemsJson?: unknown): D1OrderItem[] => {
+  let list: unknown = items;
+  if ((!list || (Array.isArray(list) && list.length === 0)) && itemsJson) {
+    list = itemsJson;
+  }
+  if (typeof list === "string") {
+    try {
+      list = JSON.parse(list);
+    } catch {
+      list = [];
+    }
+  }
+  if (!Array.isArray(list)) return [];
+  return list.map((it: unknown, idx: number) => {
+    const item = (typeof it === "object" && it !== null ? it : {}) as Record<string, unknown>;
+    return {
+      id: String(item.id || `item-${idx}`),
+      name: String(item.name || item.title || item.dishName || `Item #${idx + 1}`),
+      price: Number(item.price || 0),
+      quantity: Number(item.quantity || 1),
+      notes: String(item.notes || item.specialInstructions || ""),
+    };
+  });
+};
+
 const mergeOrdersData = (d1List: D1Order[], fsList: OrderRecord[]): D1Order[] => {
   const map = new Map<string, D1Order>();
 
   d1List.forEach((o) => {
     if (o && o.id) {
-      map.set(o.id, o);
+      const orderObj = o as unknown as Record<string, unknown>;
+      map.set(o.id, {
+        ...o,
+        items: normalizeOrderItemsList(o.items, orderObj.itemsJson),
+      });
     }
   });
 
   fsList.forEach((fo) => {
     if (!fo || !fo.id) return;
     const existing = map.get(fo.id);
+    const fsItems = normalizeOrderItemsList(fo.items);
+    const existingObj = existing as unknown as Record<string, unknown> | undefined;
+    const existingItems = existing ? normalizeOrderItemsList(existing.items, existingObj?.itemsJson) : [];
+    const finalItems = existingItems.length > 0 ? existingItems : fsItems;
+
     const converted: D1Order = {
       id: fo.id,
       userId: fo.userId || null,
@@ -77,13 +110,7 @@ const mergeOrdersData = (d1List: D1Order[], fsList: OrderRecord[]): D1Order[] =>
       address: fo.address || "",
       specialInstructions: fo.specialInstructions || "",
       status: (fo.status === "delivering" ? "out_for_delivery" : fo.status === "completed" ? "delivered" : fo.status) as D1Order["status"],
-      items: fo.items?.map((it) => ({
-        id: it.id,
-        name: it.name,
-        price: it.price,
-        quantity: it.quantity,
-        notes: it.notes,
-      })) || [],
+      items: finalItems,
       riderId: fo.riderId || existing?.riderId,
       riderName: fo.riderName || existing?.riderName,
       riderPhone: fo.riderPhone || existing?.riderPhone,
@@ -96,6 +123,7 @@ const mergeOrdersData = (d1List: D1Order[], fsList: OrderRecord[]): D1Order[] =>
       map.set(fo.id, {
         ...converted,
         ...existing,
+        items: finalItems,
         status: existing.status || converted.status,
       });
     }
@@ -144,7 +172,19 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
       setD1Orders((prev) => {
         const map = new Map<string, D1Order>();
         prev.forEach((o) => map.set(o.id, o));
-        orders.forEach((o) => map.set(o.id, { ...(map.get(o.id) || {}), ...o }));
+        orders.forEach((o) => {
+          const existing = map.get(o.id);
+          const orderObj = o as unknown as Record<string, unknown>;
+          const existingObj = existing as unknown as Record<string, unknown> | undefined;
+          const rawIncoming = normalizeOrderItemsList(o.items, orderObj.itemsJson);
+          const rawExisting = existing ? normalizeOrderItemsList(existing.items, existingObj?.itemsJson) : [];
+          const mergedItems = rawIncoming.length > 0 ? rawIncoming : rawExisting;
+          map.set(o.id, {
+            ...(existing || {}),
+            ...o,
+            items: mergedItems,
+          });
+        });
         return Array.from(map.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       });
       setD1Bookings(bookings);
@@ -204,12 +244,40 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
   const totalRevenue = d1Stats?.totalRevenue || d1Orders.reduce((sum, o) => sum + (Number(o.grandTotal) || 0), 0);
   const activeOrdersCount = d1Orders.filter((o) => o.status !== "delivered" && o.status !== "cancelled").length;
 
+  const handleOrderUpdated = (updatedOrder: D1Order) => {
+    setD1Orders((prev) =>
+      prev.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o))
+    );
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="fixed inset-0 top-0 left-0 translate-x-0 translate-y-0 w-screen max-w-none h-screen max-h-none rounded-none sm:rounded-none flex flex-col p-0 border-0 bg-background overflow-hidden z-[100] focus:outline-none">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Admin Dashboard"
+      className="fixed inset-0 top-0 left-0 w-screen h-screen flex flex-col p-0 border-0 bg-background overflow-hidden z-40 focus:outline-none select-text"
+    >
         {/* Header Bar */}
         <div className="px-4 py-3 sm:px-8 sm:py-4 border-b border-border bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -327,16 +395,6 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
           </Button>
 
           <Button
-            variant={activeTab === "reservations" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setActiveTab("reservations")}
-            className="text-xs h-8 rounded-full gap-1.5 font-medium whitespace-nowrap"
-          >
-            <CalendarDays className="w-3.5 h-3.5" />
-            Table Reservations ({d1Bookings.length})
-          </Button>
-
-          <Button
             variant={activeTab === "staff" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("staff")}
@@ -366,6 +424,7 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
               riders={d1Riders}
               ridersList={d1Riders}
               onRefresh={loadD1Data}
+              onUpdateOrder={handleOrderUpdated}
             />
           )}
 
@@ -444,7 +503,6 @@ export const AdminModal = ({ isOpen, onClose }: AdminModalProps) => {
             </div>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 };

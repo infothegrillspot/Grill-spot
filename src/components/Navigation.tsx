@@ -146,7 +146,7 @@ const Navigation = ({
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6 }}
-        className={`fixed top-0 left-0 right-0 z-40 transition-all duration-400 ${
+        className={`fixed top-0 left-0 right-0 z-30 transition-all duration-400 ${
           isMobileMenuOpen
             ? "bg-foreground"
             : isDark

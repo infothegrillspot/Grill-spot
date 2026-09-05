@@ -191,10 +191,25 @@ d1Router.get("/orders", async (req: Request, res: Response) => {
     }
 
     // Parse itemsJson safely
-    const formattedOrders = orders.map((o: Record<string, unknown>) => ({
-      ...o,
-      items: typeof o.itemsJson === "string" ? JSON.parse((o.itemsJson as string) || "[]") : o.itemsJson,
-    }));
+    const formattedOrders = orders.map((o: Record<string, unknown>) => {
+      let parsedItems: unknown[] = [];
+      if (typeof o.itemsJson === "string") {
+        try {
+          parsedItems = JSON.parse(o.itemsJson);
+        } catch {
+          parsedItems = [];
+        }
+      } else if (Array.isArray(o.items)) {
+        parsedItems = o.items;
+      } else if (Array.isArray(o.itemsJson)) {
+        parsedItems = o.itemsJson;
+      }
+
+      return {
+        ...o,
+        items: Array.isArray(parsedItems) ? parsedItems : [],
+      };
+    });
 
     res.json({ success: true, orders: formattedOrders });
   } catch (error: unknown) {
@@ -662,6 +677,7 @@ d1Router.post("/menu", async (req: Request, res: Response) => {
       description = "",
       image = "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80",
       features = "[]",
+      options = "[]",
       isAvailable = 1,
       isFeatured = 0,
       spiceLevel = "Medium",
@@ -673,11 +689,12 @@ d1Router.post("/menu", async (req: Request, res: Response) => {
     }
 
     const featuresJson = typeof features === "string" ? features : JSON.stringify(features);
+    const optionsJson = typeof options === "string" ? options : JSON.stringify(options);
 
     await runD1Query(
-      `INSERT INTO menu_items (id, name, category, price, description, image, features, isAvailable, isFeatured, spiceLevel, prepTime, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      [id, name, category, Number(price), description, image, featuresJson, Number(isAvailable), Number(isFeatured), spiceLevel, prepTime]
+      `INSERT INTO menu_items (id, name, category, price, description, image, features, options, isAvailable, isFeatured, spiceLevel, prepTime, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      [id, name, category, Number(price), description, image, featuresJson, optionsJson, Number(isAvailable), Number(isFeatured), spiceLevel, prepTime]
     );
 
     const inserted = await runD1Query("SELECT * FROM menu_items WHERE id = ? LIMIT 1", [id]);
@@ -697,11 +714,16 @@ d1Router.put("/menu/:id", async (req: Request, res: Response) => {
       price,
       description,
       image,
+      features,
+      options,
       isAvailable,
       isFeatured,
       spiceLevel,
       prepTime,
     } = req.body;
+
+    const featuresParam = features !== undefined ? (typeof features === "string" ? features : JSON.stringify(features)) : null;
+    const optionsParam = options !== undefined ? (typeof options === "string" ? options : JSON.stringify(options)) : null;
 
     await runD1Query(
       `UPDATE menu_items SET 
@@ -710,6 +732,8 @@ d1Router.put("/menu/:id", async (req: Request, res: Response) => {
         price = coalesce(?, price),
         description = coalesce(?, description),
         image = coalesce(?, image),
+        features = coalesce(?, features),
+        options = coalesce(?, options),
         isAvailable = coalesce(?, isAvailable),
         isFeatured = coalesce(?, isFeatured),
         spiceLevel = coalesce(?, spiceLevel),
@@ -722,6 +746,8 @@ d1Router.put("/menu/:id", async (req: Request, res: Response) => {
         price !== undefined ? Number(price) : null,
         description,
         image,
+        featuresParam,
+        optionsParam,
         isAvailable !== undefined ? Number(isAvailable) : null,
         isFeatured !== undefined ? Number(isFeatured) : null,
         spiceLevel,

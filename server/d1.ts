@@ -165,6 +165,11 @@ function seedInitialMemoryData() {
         description: "Hand-smashed double beef patty with melted cheddar, house pickles, and secret spot sauce on toasted brioche.",
         image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80",
         features: JSON.stringify(["Charcoal grilled", "House sauce", "Brioche bun"]),
+        options: JSON.stringify([
+          { id: "opt_double", name: "Double Patty", price: 450 },
+          { id: "opt_triple", name: "Triple Patty", price: 850 },
+          { id: "opt_cheese", name: "Extra Melted Cheddar", price: 150 },
+        ]),
         isAvailable: 1,
         isFeatured: 1,
         spiceLevel: "Medium",
@@ -271,6 +276,86 @@ function seedInitialMemoryData() {
       },
     ];
     defaultMenu.forEach((m) => memoryStore.menu.set(m.id, m));
+  }
+
+  if (memoryStore.orders.size === 0) {
+    const defaultOrders = [
+      {
+        id: "ord_101",
+        userId: "usr_ahmed",
+        customerName: "Ahmed Khan",
+        phone: "+92 300 1234567",
+        orderType: "delivery",
+        subtotal: 3350,
+        deliveryFee: 150,
+        grandTotal: 3500,
+        address: "House 24-B, Sector Z, Phase 3, DHA Lahore",
+        specialInstructions: "Please pack extra garlic toum and napkins",
+        status: "pending",
+        itemsJson: JSON.stringify([
+          { id: "burgers", name: "Classic Smashed Burger", price: 1450, quantity: 2, notes: "Extra pickles, well done" },
+          { id: "mint_margarita", name: "Lahori Mint Margarita", price: 450, quantity: 1, notes: "Less ice" },
+        ]),
+        createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+      },
+      {
+        id: "ord_102",
+        userId: "usr_fatima",
+        customerName: "Fatima Ali",
+        phone: "+92 321 9876543",
+        orderType: "delivery",
+        subtotal: 2450,
+        deliveryFee: 150,
+        grandTotal: 2600,
+        address: "Apartment 402, Al-Hafeez Heights, Gulberg III, Lahore",
+        specialInstructions: "Call when rider reaches building gate",
+        status: "preparing",
+        itemsJson: JSON.stringify([
+          { id: "shawarma", name: "Spit-Roasted Chicken Shawarma", price: 850, quantity: 2, notes: "Spicy garlic toum" },
+          { id: "loaded_fries", name: "Grill Spot Loaded Animal Fries", price: 750, quantity: 1, notes: "Cheese on top" },
+        ]),
+        createdAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+      },
+      {
+        id: "ord_103",
+        userId: "usr_bilal",
+        customerName: "Bilal Sheikh",
+        phone: "+92 333 4567890",
+        orderType: "delivery",
+        subtotal: 2650,
+        deliveryFee: 150,
+        grandTotal: 2800,
+        address: "Plot 18, Block M, Model Town, Lahore",
+        specialInstructions: "Leave with security if not reachable",
+        status: "out_for_delivery",
+        riderId: "rdr_1",
+        riderName: "Tariq Butt",
+        riderPhone: "+92 301 5567890",
+        itemsJson: JSON.stringify([
+          { id: "pizza", name: "Wood-Fired Margherita & Pepperoni", price: 2200, quantity: 1, notes: "Crispy crust" },
+          { id: "mint_margarita", name: "Lahori Mint Margarita", price: 450, quantity: 1, notes: "Chilled" },
+        ]),
+        createdAt: new Date(Date.now() - 65 * 60 * 1000).toISOString(),
+      },
+      {
+        id: "ord_104",
+        userId: "usr_zainab",
+        customerName: "Zainab Malik",
+        phone: "+92 312 7654321",
+        orderType: "takeaway",
+        subtotal: 1950,
+        deliveryFee: 0,
+        grandTotal: 1950,
+        address: "Dine-in / Pickup (MM Alam Road Branch)",
+        specialInstructions: "Pack for takeaway at 8:30 PM",
+        status: "delivered",
+        itemsJson: JSON.stringify([
+          { id: "bbq_platter", name: "Charcoal Seekh Kebab & Malai Boti", price: 1950, quantity: 1, notes: "Hot naan with mint raita" },
+        ]),
+        createdAt: new Date(Date.now() - 180 * 60 * 1000).toISOString(),
+      },
+    ];
+    defaultOrders.forEach((o) => memoryStore.orders.set(o.id, o));
   }
 }
 
@@ -509,10 +594,11 @@ function handleMemoryFallback<T = Record<string, unknown>>(sql: string, params: 
       description: params[4] ?? "",
       image: params[5] ?? "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80",
       features: params[6] ?? "[]",
-      isAvailable: params[7] !== undefined ? Number(params[7]) : 1,
-      isFeatured: params[8] !== undefined ? Number(params[8]) : 0,
-      spiceLevel: params[9] ?? "Medium",
-      prepTime: params[10] ?? "15 mins",
+      options: params[7] ?? "[]",
+      isAvailable: params[8] !== undefined ? Number(params[8]) : 1,
+      isFeatured: params[9] !== undefined ? Number(params[9]) : 0,
+      spiceLevel: params[10] ?? "Medium",
+      prepTime: params[11] ?? "15 mins",
       createdAt: now,
       updatedAt: now,
     };
@@ -614,10 +700,12 @@ function handleMemoryFallback<T = Record<string, unknown>>(sql: string, params: 
         price: Number(params[2] ?? existing.price),
         description: params[3] ?? existing.description,
         image: params[4] ?? existing.image,
-        isAvailable: params[5] !== undefined ? Number(params[5]) : existing.isAvailable,
-        isFeatured: params[6] !== undefined ? Number(params[6]) : existing.isFeatured,
-        spiceLevel: params[7] ?? existing.spiceLevel,
-        prepTime: params[8] ?? existing.prepTime,
+        features: params[5] ?? existing.features ?? "[]",
+        options: params[6] ?? existing.options ?? "[]",
+        isAvailable: params[7] !== undefined ? Number(params[7]) : existing.isAvailable,
+        isFeatured: params[8] !== undefined ? Number(params[8]) : existing.isFeatured,
+        spiceLevel: params[9] ?? existing.spiceLevel,
+        prepTime: params[10] ?? existing.prepTime,
         updatedAt: new Date().toISOString(),
       };
       memoryStore.menu.set(id, updated);
@@ -908,6 +996,7 @@ export async function initializeD1Database(): Promise<void> {
         description TEXT,
         image TEXT,
         features TEXT,
+        options TEXT DEFAULT '[]',
         isAvailable INTEGER DEFAULT 1,
         isFeatured INTEGER DEFAULT 0,
         spiceLevel TEXT DEFAULT 'Medium',
@@ -916,6 +1005,18 @@ export async function initializeD1Database(): Promise<void> {
         updatedAt TEXT
       );
     `);
+
+    try {
+      const existingMenuCols = await runD1Query<{ name: string }>("PRAGMA table_info(menu_items);");
+      const existingMenuColNames = new Set(existingMenuCols.map((c) => c.name));
+      if (!existingMenuColNames.has("options")) {
+        await runD1Query("ALTER TABLE menu_items ADD COLUMN options TEXT DEFAULT '[]';").catch((e) => {
+          console.warn("Column options on menu_items add note:", e.message);
+        });
+      }
+    } catch (e) {
+      console.warn("PRAGMA check on menu_items note:", e);
+    }
 
     console.log("Cloudflare D1 Database schemas verified and columns migrated successfully.");
   } catch (err) {

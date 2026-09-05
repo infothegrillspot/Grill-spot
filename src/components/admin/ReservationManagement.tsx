@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { D1Booking, updateD1BookingStatus, deleteD1Booking } from "@/lib/d1Api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,20 +36,36 @@ export const ReservationManagement = ({
   bookings,
   onRefresh,
 }: ReservationManagementProps) => {
-  const effectiveBookings = bookingsList || bookings || [];
+  const [localBookings, setLocalBookings] = useState<D1Booking[]>(() => bookingsList || bookings || []);
+
+  useEffect(() => {
+    setLocalBookings(bookingsList || bookings || []);
+  }, [bookingsList, bookings]);
+
+  const effectiveBookings = localBookings;
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
   const handleStatusChange = async (id: string, status: string) => {
+    const previousBookings = localBookings;
+    const typedStatus = status as D1Booking["status"];
+
+    // 1. Instant optimistic update
+    setLocalBookings((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, status: typedStatus } : b))
+    );
+
     try {
       const ok = await updateD1BookingStatus(id, status);
       if (ok) {
         toast.success(`Booking status updated to ${status}`);
-        onRefresh();
+      } else {
+        throw new Error("Failed to update status on server");
       }
     } catch (err) {
       console.error(err);
-      toast.error("Failed to update status");
+      toast.error("Failed to update status, reverting");
+      setLocalBookings(previousBookings);
     }
   };
 

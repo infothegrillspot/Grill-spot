@@ -21,6 +21,12 @@ export interface Amenity {
   description: string;
 }
 
+export interface LocationOption {
+  id: string;
+  name: string;
+  price: number;
+}
+
 export interface Location {
   id: string;
   name: string;
@@ -32,6 +38,7 @@ export interface Location {
   images: string[];
   features: string[];
   featured: boolean;
+  options?: LocationOption[];
   amenities: Amenity[];
   details: string[];
   reviews: Review[];
@@ -49,6 +56,12 @@ export const locations: Location[] = [
     images: [heroGrill, menuBbq, menuFries],
     features: ["Charcoal grilled", "House sauce", "Brioche bun"],
     featured: true,
+    options: [
+      { id: "opt_single", name: "Single Patty", price: 0 },
+      { id: "opt_double", name: "Double Patty", price: 450 },
+      { id: "opt_triple", name: "Triple Patty", price: 850 },
+      { id: "opt_cheese", name: "Extra Melted Cheddar", price: 150 },
+    ],
     amenities: [
       { icon: Flame, label: "Flame Grilled", description: "Smashed over real charcoal heat" },
       { icon: Beef, label: "Prime Beef", description: "Fresh, never frozen patties" },
@@ -81,6 +94,12 @@ export const locations: Location[] = [
     images: [heroGrill, menuBurger, menuDrinks],
     features: ["Spit roasted", "Garlic sauce", "Fresh saj bread"],
     featured: true,
+    options: [
+      { id: "opt_regular_wrap", name: "Regular Saj Wrap", price: 0 },
+      { id: "opt_jumbo_wrap", name: "Jumbo Loaded Wrap", price: 350 },
+      { id: "opt_extra_cheese", name: "Double Mozzarella", price: 200 },
+      { id: "opt_extra_toum", name: "Garlic Toum Dip Pot", price: 120 },
+    ],
     amenities: [
       { icon: Drumstick, label: "24h Marinade", description: "Slow-marinated in spices" },
       { icon: Flame, label: "Spit Roasted", description: "Carved fresh off the spit" },

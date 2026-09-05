@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { D1MenuItem, createD1MenuItem, updateD1MenuItem, deleteD1MenuItem } from "@/lib/d1Api";
+import { D1MenuItem, MenuItemOption, createD1MenuItem, updateD1MenuItem, deleteD1MenuItem } from "@/lib/d1Api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ import {
   Eye,
   DollarSign,
   Tag,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -68,6 +69,44 @@ export const MenuManagement = ({ menuList, menuItems, onRefresh }: MenuManagemen
   const [spiceLevel, setSpiceLevel] = useState("Medium");
   const [prepTime, setPrepTime] = useState("12-15 mins");
 
+  // Custom Options state (e.g. Double Patty, Triple Patty, Extra Cheese)
+  const [optionsList, setOptionsList] = useState<MenuItemOption[]>([]);
+  const [newOptionName, setNewOptionName] = useState("");
+  const [newOptionPrice, setNewOptionPrice] = useState<string>("");
+
+  const handleAddOption = () => {
+    const trimmedName = newOptionName.trim();
+    if (!trimmedName) {
+      toast.error("Please enter an option name (e.g. Double Patty, Triple Patty)");
+      return;
+    }
+    const parsedPrice = Number(newOptionPrice);
+    if (newOptionPrice === "" || isNaN(parsedPrice) || parsedPrice < 0) {
+      toast.error("Please specify a valid extra price in PKR (e.g. 450)");
+      return;
+    }
+
+    if (optionsList.some((o) => o.name.toLowerCase() === trimmedName.toLowerCase())) {
+      toast.error(`Option "${trimmedName}" is already added.`);
+      return;
+    }
+
+    const newOpt: MenuItemOption = {
+      id: `opt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      name: trimmedName,
+      price: parsedPrice,
+    };
+
+    setOptionsList((prev) => [...prev, newOpt]);
+    setNewOptionName("");
+    setNewOptionPrice("");
+    toast.success(`Added option: ${trimmedName} (+PKR ${parsedPrice})`);
+  };
+
+  const handleRemoveOption = (id: string) => {
+    setOptionsList((prev) => prev.filter((o) => o.id !== id));
+  };
+
   const openAddModal = () => {
     setEditingItem(null);
     setName("");
@@ -80,6 +119,9 @@ export const MenuManagement = ({ menuList, menuItems, onRefresh }: MenuManagemen
     setIsFeatured(false);
     setSpiceLevel("Medium");
     setPrepTime("15 mins");
+    setOptionsList([]);
+    setNewOptionName("");
+    setNewOptionPrice("");
     setIsDialogOpen(true);
   };
 
@@ -100,6 +142,27 @@ export const MenuManagement = ({ menuList, menuItems, onRefresh }: MenuManagemen
     setIsFeatured(Boolean(item.isFeatured));
     setSpiceLevel(item.spiceLevel || "Medium");
     setPrepTime(item.prepTime || "15 mins");
+
+    // Parse options
+    let parsedOpts: MenuItemOption[] = [];
+    if (Array.isArray(item.options)) {
+      parsedOpts = item.options;
+    } else if (typeof item.options === "string" && item.options.trim().startsWith("[")) {
+      try {
+        parsedOpts = JSON.parse(item.options);
+      } catch {
+        parsedOpts = [];
+      }
+    } else if (item.category === "Smashed Burgers" || item.name.toLowerCase().includes("burger")) {
+      // Default common burger upgrades if none configured yet
+      parsedOpts = [
+        { id: "opt_double", name: "Double Patty", price: 450 },
+        { id: "opt_triple", name: "Triple Patty", price: 850 },
+      ];
+    }
+    setOptionsList(parsedOpts);
+    setNewOptionName("");
+    setNewOptionPrice("");
     setIsDialogOpen(true);
   };
 
@@ -125,6 +188,7 @@ export const MenuManagement = ({ menuList, menuItems, onRefresh }: MenuManagemen
           description,
           image,
           features: JSON.stringify(parsedFeatures),
+          options: JSON.stringify(optionsList),
           isAvailable: isAvailable ? 1 : 0,
           isFeatured: isFeatured ? 1 : 0,
           spiceLevel,
@@ -139,6 +203,7 @@ export const MenuManagement = ({ menuList, menuItems, onRefresh }: MenuManagemen
           description,
           image,
           features: JSON.stringify(parsedFeatures),
+          options: JSON.stringify(optionsList),
           isAvailable: isAvailable ? 1 : 0,
           isFeatured: isFeatured ? 1 : 0,
           spiceLevel,
@@ -279,6 +344,17 @@ export const MenuManagement = ({ menuList, menuItems, onRefresh }: MenuManagemen
               ? item.features.split(",")
               : [];
 
+            let cardOptions: MenuItemOption[] = [];
+            if (Array.isArray(item.options)) {
+              cardOptions = item.options;
+            } else if (typeof item.options === "string" && item.options.startsWith("[")) {
+              try {
+                cardOptions = JSON.parse(item.options || "[]");
+              } catch {
+                cardOptions = [];
+              }
+            }
+
             return (
               <Card
                 key={item.id}
@@ -369,6 +445,26 @@ export const MenuManagement = ({ menuList, menuItems, onRefresh }: MenuManagemen
                             {f.trim()}
                           </span>
                         ))}
+                      </div>
+                    )}
+
+                    {cardOptions.length > 0 && (
+                      <div className="pt-2 border-t border-border/60">
+                        <div className="flex items-center gap-1 text-[10px] font-medium text-foreground/80 mb-1">
+                          <Layers className="w-3 h-3 text-primary" />
+                          <span>Configured Upgrades ({cardOptions.length}):</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {cardOptions.map((opt) => (
+                            <span
+                              key={opt.id}
+                              className="text-[10px] px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary font-medium flex items-center gap-1"
+                            >
+                              <span>{opt.name}</span>
+                              <span className="font-mono text-[9px] opacity-80">+Rs. {Number(opt.price).toLocaleString()}</span>
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -517,6 +613,141 @@ export const MenuManagement = ({ menuList, menuItems, onRefresh }: MenuManagemen
                     className="h-8 text-xs bg-background border-border"
                   />
                 </div>
+              </div>
+
+              {/* Custom Options & Patty Upgrades (Double Patty, Triple Patty, Extra Cheese, etc.) */}
+              <div className="p-3.5 rounded-xl border border-border bg-muted/25 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-primary" />
+                    <div>
+                      <span className="text-xs font-semibold text-foreground">
+                        Custom Options & Patty Upgrades
+                      </span>
+                      <p className="text-[11px] text-muted-foreground font-light">
+                        Add options by typing name (e.g. Double Patty, Triple Patty) and additional price in PKR.
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] font-mono">
+                    {optionsList.length} {optionsList.length === 1 ? "Option" : "Options"}
+                  </Badge>
+                </div>
+
+                {/* Create Option Row: Type Option Name + Price */}
+                <div className="bg-background p-3 rounded-lg border border-border space-y-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                    <div className="sm:col-span-6">
+                      <label className="block text-[10px] uppercase font-semibold text-muted-foreground mb-1">
+                        Option / Variant Name
+                      </label>
+                      <Input
+                        placeholder="e.g. Double Patty, Triple Patty"
+                        value={newOptionName}
+                        onChange={(e) => setNewOptionName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddOption();
+                          }
+                        }}
+                        className="h-8 text-xs bg-background"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-3">
+                      <label className="block text-[10px] uppercase font-semibold text-muted-foreground mb-1">
+                        Extra Price (PKR)
+                      </label>
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="450"
+                        value={newOptionPrice}
+                        onChange={(e) => setNewOptionPrice(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddOption();
+                          }
+                        }}
+                        className="h-8 text-xs bg-background font-mono font-medium"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-3 flex items-end">
+                      <Button
+                        type="button"
+                        onClick={handleAddOption}
+                        className="w-full h-8 px-2 text-xs bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Option
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Quick Preset Suggestion Pills */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    <span className="text-[10px] text-muted-foreground">Quick ideas:</span>
+                    {[
+                      { name: "Double Patty", price: 450 },
+                      { name: "Triple Patty", price: 850 },
+                      { name: "Extra Melted Cheddar", price: 150 },
+                      { name: "Crispy Beef Bacon", price: 250 },
+                      { name: "Extra Garlic Toum", price: 120 },
+                    ].map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() => {
+                          setNewOptionName(preset.name);
+                          setNewOptionPrice(preset.price.toString());
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded-full border border-border bg-card hover:border-primary/50 hover:bg-primary/10 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        + {preset.name} (Rs. {preset.price})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* List of Configured Options */}
+                {optionsList.length > 0 ? (
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {optionsList.map((opt, idx) => (
+                      <div
+                        key={opt.id || idx}
+                        className="flex items-center justify-between px-3 py-1.5 bg-background rounded-lg border border-border text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-4 h-4 rounded-full bg-primary/15 text-primary text-[10px] font-bold flex items-center justify-center">
+                            {idx + 1}
+                          </span>
+                          <span className="font-medium text-foreground">{opt.name}</span>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-xs font-semibold text-primary">
+                            + PKR {Number(opt.price).toLocaleString()}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveOption(opt.id)}
+                            className="text-muted-foreground hover:text-destructive transition-colors p-1 cursor-pointer"
+                            title="Remove Option"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-2.5 text-center text-[11px] text-muted-foreground bg-background/50 rounded-lg border border-dashed border-border/70">
+                    No custom options added yet. Type an option name (like Double Patty, Triple Patty) and price above to add.
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-1">

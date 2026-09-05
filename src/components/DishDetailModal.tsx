@@ -38,22 +38,45 @@ export const DishDetailModal = ({ dishId, isOpen, onClose }: DishDetailModalProp
   const [quantity, setQuantity] = useState(1);
   const [specialNotes, setSpecialNotes] = useState("");
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const availableOptions = dish?.options || [];
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(() => {
+    return availableOptions.length > 0 ? availableOptions[0].id : null;
+  });
 
   if (!dish) return null;
 
   const allImages = [dish.image, ...(dish.images || [])];
+  const selectedOption = availableOptions.find((o) => o.id === selectedOptionId) || null;
+  const unitPrice = dish.price + (selectedOption ? selectedOption.price : 0);
+  const totalPrice = unitPrice * quantity;
 
   const handleAddToCart = () => {
+    const itemCartId = selectedOption && selectedOption.price > 0
+      ? `${dish.id}_${selectedOption.id}`
+      : dish.id;
+    const itemName = selectedOption && selectedOption.price > 0
+      ? `${dish.name} (${selectedOption.name})`
+      : dish.name;
+    const itemNotes = [
+      selectedOption?.name && selectedOption.name !== "Single Patty" && selectedOption.name !== "Regular Saj Wrap"
+        ? `Option: ${selectedOption.name}`
+        : null,
+      specialNotes.trim() || null,
+      dish.features.slice(0, 2).join(", "),
+    ]
+      .filter(Boolean)
+      .join(" • ");
+
     for (let i = 0; i < quantity; i++) {
       addToCart({
-        id: dish.id,
-        name: dish.name,
-        price: dish.price,
+        id: itemCartId,
+        name: itemName,
+        price: unitPrice,
         image: dish.image,
-        notes: specialNotes.trim() || dish.features.slice(0, 2).join(", "),
+        notes: itemNotes,
       });
     }
-    toast.success(`Added ${quantity}x ${dish.name} to cart!`);
+    toast.success(`Added ${quantity}x ${itemName} to cart!`);
     setIsCartOpen(true);
     onClose();
   };
@@ -174,6 +197,55 @@ export const DishDetailModal = ({ dishId, isOpen, onClose }: DishDetailModalProp
             </div>
           </div>
 
+          {/* Customizable Options / Patty Selection */}
+          {availableOptions.length > 0 && (
+            <div className="space-y-2.5 p-3.5 rounded-xl border border-border bg-muted/20">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs uppercase tracking-wider font-semibold text-foreground flex items-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 text-primary" /> Select Option / Patty Upgrade
+                </h4>
+                <span className="text-[11px] text-muted-foreground font-light">Custom upgrade</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {availableOptions.map((opt) => {
+                  const isSelected = selectedOptionId === opt.id || (!selectedOptionId && opt.price === 0);
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setSelectedOptionId(opt.id)}
+                      className={`flex items-center justify-between p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                        isSelected
+                          ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                          : "border-border bg-card hover:border-border/80 text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                            isSelected ? "border-primary bg-primary" : "border-muted-foreground/40"
+                          }`}
+                        >
+                          {isSelected && <Check className="w-2.5 h-2.5 text-primary-foreground stroke-[3]" />}
+                        </div>
+                        <span className="text-xs font-medium text-foreground">{opt.name}</span>
+                      </div>
+
+                      <span
+                        className={`text-xs font-mono font-semibold ${
+                          isSelected ? "text-primary" : "text-muted-foreground"
+                        }`}
+                      >
+                        {opt.price > 0 ? `+ Rs. ${opt.price.toLocaleString()}` : "Included"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Special Instructions Note */}
           <div>
             <label className="text-xs font-medium text-foreground block mb-1.5">
@@ -217,7 +289,7 @@ export const DishDetailModal = ({ dishId, isOpen, onClose }: DishDetailModalProp
               className="flex-1 h-11 bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-xs uppercase tracking-wider rounded-full shadow-md flex items-center justify-center gap-2"
             >
               <ShoppingBag className="w-4 h-4" />
-              Add to Order • Rs. {(dish.price * quantity).toLocaleString()}
+              Add to Order • Rs. {totalPrice.toLocaleString()}
             </Button>
           </div>
         </div>

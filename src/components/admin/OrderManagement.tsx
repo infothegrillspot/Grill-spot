@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   D1Order,
   D1Rider,
@@ -51,6 +51,38 @@ interface OrderManagementProps {
   orders?: D1Order[];
   riders?: D1Rider[];
   onRefresh: () => void;
+  onUpdateOrder?: (updatedOrder: D1Order) => void;
+}
+
+function parseOrderItems(order: D1Order | null | undefined): Array<{ id?: string; name: string; price: number; quantity: number; notes?: string }> {
+  if (!order) return [];
+
+  let raw = order.items as unknown;
+  const orderObj = order as unknown as Record<string, unknown>;
+  if ((!raw || (Array.isArray(raw) && raw.length === 0)) && orderObj.itemsJson) {
+    raw = orderObj.itemsJson;
+  }
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = [];
+    }
+  }
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw.map((it: unknown, idx: number) => {
+    const item = (typeof it === "object" && it !== null ? it : {}) as Record<string, unknown>;
+    return {
+      id: String(item.id || `item-${idx}`),
+      name: String(item.name || item.title || item.dishName || `Item #${idx + 1}`),
+      price: Number(item.price || 0),
+      quantity: Number(item.quantity || 1),
+      notes: String(item.notes || item.specialInstructions || ""),
+    };
+  });
 }
 
 export const OrderManagement = ({
@@ -59,9 +91,20 @@ export const OrderManagement = ({
   orders,
   riders,
   onRefresh,
+  onUpdateOrder,
 }: OrderManagementProps) => {
-  const effectiveOrders = ordersList || orders || [];
-  const effectiveRiders = ridersList || riders || [];
+  const [localOrders, setLocalOrders] = useState<D1Order[]>(() => ordersList || orders || []);
+  const [effectiveRiders, setEffectiveRiders] = useState<D1Rider[]>(() => ridersList || riders || []);
+
+  useEffect(() => {
+    setLocalOrders(ordersList || orders || []);
+  }, [ordersList, orders]);
+
+  useEffect(() => {
+    setEffectiveRiders(ridersList || riders || []);
+  }, [ridersList, riders]);
+
+  const effectiveOrders = localOrders;
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<D1Order | null>(null);
@@ -90,6 +133,27 @@ export const OrderManagement = ({
       return;
     }
 
+    // 1. Instantly update state optimistically with 0ms latency
+    const previousOrders = localOrders;
+    const updatedList = localOrders.map((o) =>
+      o.id === selectedOrder.id
+        ? {
+            ...o,
+            status: "out_for_delivery" as const,
+            riderId: rider.id,
+            riderName: rider.name,
+            riderPhone: rider.phone,
+          }
+        : o
+    );
+    setLocalOrders(updatedList);
+    const updatedOrder = updatedList.find((o) => o.id === selectedOrder.id);
+    if (updatedOrder && onUpdateOrder) {
+      onUpdateOrder(updatedOrder);
+    }
+    toast.success(`Order ${selectedOrder.id} assigned to ${rider.name}!`);
+    setIsAllocateModalOpen(false);
+
     setIsAllocating(true);
     try {
       const success = await allocateOrderToRider(
@@ -108,23 +172,38 @@ export const OrderManagement = ({
         riderPhone: rider.phone,
       }).catch((e) => console.warn("Firestore rider sync warning:", e));
 
-      if (success) {
-        toast.success(`Order ${selectedOrder.id} assigned to ${rider.name}!`);
-        setIsAllocateModalOpen(false);
-        onRefresh();
-      } else {
-        toast.error("Failed to allocate order");
+      if (!success) {
+        throw new Error("Server allocation failed");
       }
     } catch (err) {
       console.error(err);
-      toast.error("Allocation error occurred");
+      toast.error("Allocation error on server, reverting");
+      setLocalOrders(previousOrders);
+      if (selectedOrder && onUpdateOrder) {
+        onUpdateOrder(selectedOrder);
+      }
     } finally {
       setIsAllocating(false);
     }
   };
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
+    const previousOrders = localOrders;
+    const typedStatus = newStatus as D1Order["status"];
+
+    // 1. Instantly update UI optimistically with 0ms delay!
+    const updatedList = localOrders.map((o) =>
+      o.id === orderId ? { ...o, status: typedStatus } : o
+    );
+    setLocalOrders(updatedList);
+
+    const updatedOrder = updatedList.find((o) => o.id === orderId);
+    if (updatedOrder && onUpdateOrder) {
+      onUpdateOrder(updatedOrder);
+    }
+
     try {
+      // 2. Persist update in background
       const ok = await updateD1OrderStatus(orderId, newStatus);
       // Map status for Firestore
       type FsStatus = "pending" | "preparing" | "delivering" | "out_for_delivery" | "completed" | "delivered" | "cancelled";
@@ -132,20 +211,34 @@ export const OrderManagement = ({
       await updateOrderStatusInFirestore(orderId, fsStatus).catch((e) => console.warn("Firestore status sync warning:", e));
 
       if (ok) {
-        toast.success(`Order ${orderId} updated to ${newStatus.replace("_", " ")}`);
-        onRefresh();
+        toast.success(`Status updated to ${newStatus.replace(/_/g, " ")}`);
+      } else {
+        throw new Error("Failed to update status on server");
       }
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to update status");
+      console.error("Status update error:", err);
+      toast.error("Failed to update status on server, reverting");
+      setLocalOrders(previousOrders);
+      const prevOrder = previousOrders.find((o) => o.id === orderId);
+      if (prevOrder && onUpdateOrder) {
+        onUpdateOrder(prevOrder);
+      }
     }
   };
 
   const handleDelete = async (orderId: string) => {
     if (window.confirm(`Are you sure you want to delete order ${orderId}?`)) {
-      await deleteD1Order(orderId);
-      toast.success(`Order ${orderId} deleted`);
-      onRefresh();
+      const previousOrders = localOrders;
+      setLocalOrders((prev) => prev.filter((o) => o.id !== orderId));
+      try {
+        await deleteD1Order(orderId);
+        toast.success(`Order ${orderId} deleted`);
+        onRefresh();
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to delete order");
+        setLocalOrders(previousOrders);
+      }
     }
   };
 
@@ -274,13 +367,14 @@ export const OrderManagement = ({
               ) : (
                 filteredOrders.map((order) => {
                   const cleanPhone = order.phone?.replace(/[^0-9]/g, "") || "";
-                  const itemCount = Array.isArray(order.items)
-                    ? order.items.reduce((sum, item) => sum + (item.quantity || 1), 0)
-                    : 1;
+                  const orderItems = parseOrderItems(order);
+                  const itemCount = orderItems.reduce((sum, item) => sum + (item.quantity || 1), 0) || (order.items?.length || 1);
 
                   const isPending = order.status === "pending";
-                  const isOut = order.status === "out_for_delivery";
+                  const isPreparing = order.status === "preparing";
+                  const isOut = order.status === "out_for_delivery" || order.status === "delivering";
                   const isDelivered = order.status === "delivered" || order.status === "completed";
+                  const isCancelled = order.status === "cancelled";
 
                   return (
                     <TableRow key={order.id} className="border-border hover:bg-muted/20">
@@ -359,21 +453,43 @@ export const OrderManagement = ({
 
                       {/* 4. Items & Total */}
                       <TableCell>
-                        <div>
+                        <div className="space-y-1">
                           <p className="text-xs font-bold text-foreground font-mono">
                             Rs. {Number(order.grandTotal || 0).toLocaleString()}
                           </p>
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedOrder(order);
+                              setSelectedOrder({
+                                ...order,
+                                items: orderItems,
+                              });
                               setIsDetailsModalOpen(true);
                             }}
-                            className="text-[11px] text-primary hover:underline flex items-center gap-0.5 mt-0.5"
+                            className="text-[11px] text-primary hover:text-primary/80 font-medium inline-flex items-center gap-1 bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded border border-primary/20 transition-all text-left group"
+                            title="Click to view all items and details"
                           >
-                            <span>{itemCount} item(s)</span>
-                            <ChevronRight className="w-3 h-3" />
+                            <ShoppingBag className="w-3 h-3 text-primary flex-shrink-0 group-hover:scale-110 transition-transform" />
+                            <span className="font-semibold">{itemCount} item{itemCount === 1 ? "" : "s"}</span>
+                            <ChevronRight className="w-3 h-3 text-primary" />
                           </button>
+                          {/* Item summary tags */}
+                          <div
+                            onClick={() => {
+                              setSelectedOrder({
+                                ...order,
+                                items: orderItems,
+                              });
+                              setIsDetailsModalOpen(true);
+                            }}
+                            className="text-[10px] text-muted-foreground line-clamp-2 max-w-[200px] leading-tight font-light cursor-pointer hover:text-foreground transition-colors"
+                          >
+                            {orderItems.length > 0 ? (
+                              orderItems.map((it) => `${it.quantity}× ${it.name}`).join(", ")
+                            ) : (
+                              <span>Standard Order Selection</span>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
 
@@ -412,15 +528,20 @@ export const OrderManagement = ({
                       {/* 6. Status Selector */}
                       <TableCell>
                         <select
+                          id={`order-status-${order.id}`}
                           value={order.status}
                           onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                          className={`h-7 px-2 text-[11px] font-medium rounded border cursor-pointer ${
+                          className={`h-7 px-2 text-[11px] font-medium rounded border cursor-pointer transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary ${
                             isPending
-                              ? "bg-amber-500/10 text-amber-700 border-amber-500/30"
+                              ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                              : isPreparing
+                              ? "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30"
                               : isOut
-                              ? "bg-blue-500/10 text-blue-700 border-blue-500/30"
+                              ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30"
                               : isDelivered
-                              ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/30"
+                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                              : isCancelled
+                              ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30"
                               : "bg-muted text-foreground border-border"
                           }`}
                         >
@@ -457,7 +578,7 @@ export const OrderManagement = ({
 
       {/* Allocate Rider Modal */}
       <Dialog open={isAllocateModalOpen} onOpenChange={setIsAllocateModalOpen}>
-        <DialogContent className="sm:max-w-md bg-card border-border text-foreground">
+        <DialogContent className="sm:max-w-md bg-card border-border text-foreground z-[120]">
           <DialogHeader>
             <DialogTitle className="text-base font-normal tracking-tight flex items-center gap-2">
               <Bike className="w-4 h-4 text-blue-500" />
@@ -564,57 +685,81 @@ export const OrderManagement = ({
 
       {/* Order Itemized Details Modal */}
       <Dialog open={isDetailsModalOpen} onOpenChange={setIsDetailsModalOpen}>
-        <DialogContent className="sm:max-w-md bg-card border-border text-foreground">
+        <DialogContent className="sm:max-w-md bg-card border-border text-foreground z-[120]">
           <DialogHeader>
             <DialogTitle className="text-base font-normal tracking-tight flex items-center gap-2">
               <ShoppingBag className="w-4 h-4 text-primary" />
               Order Items Breakdown #{selectedOrder?.id}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground font-light">
-              Customer: {selectedOrder?.customerName} • Phone: {selectedOrder?.phone}
+              Customer: {selectedOrder?.customerName || "Valued Customer"} • Phone: {selectedOrder?.phone || "N/A"}
             </DialogDescription>
           </DialogHeader>
 
-          {selectedOrder && (
-            <div className="space-y-4 py-2 text-xs">
-              <div className="border border-border rounded-md divide-y divide-border">
-                {Array.isArray(selectedOrder.items) && selectedOrder.items.length > 0 ? (
-                  selectedOrder.items.map((item, idx) => (
-                    <div key={idx} className="p-3 flex items-center justify-between">
-                      <div>
-                        <span className="font-medium text-foreground">
-                          {item.quantity}x {item.name}
-                        </span>
-                        {item.notes && <p className="text-[10px] text-muted-foreground italic">{item.notes}</p>}
+          {selectedOrder && (() => {
+            const items = parseOrderItems(selectedOrder);
+            return (
+              <div className="space-y-4 py-2 text-xs">
+                <div className="border border-border rounded-md divide-y divide-border bg-card">
+                  {items.length > 0 ? (
+                    items.map((item, idx) => (
+                      <div key={idx} className="p-3 flex items-center justify-between hover:bg-muted/20 transition-colors">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
+                              {item.quantity}×
+                            </span>
+                            <span className="font-medium text-foreground text-xs">
+                              {item.name}
+                            </span>
+                          </div>
+                          {item.notes && (
+                            <p className="text-[10px] text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded italic inline-block mt-0.5">
+                              Note: {item.notes}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right font-mono">
+                          <span className="text-xs font-semibold text-foreground">
+                            Rs. {(Number(item.price || 0) * (item.quantity || 1)).toLocaleString()}
+                          </span>
+                          {item.quantity > 1 && (
+                            <span className="block text-[10px] text-muted-foreground font-normal">
+                              (Rs. {Number(item.price || 0).toLocaleString()} each)
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <span className="font-mono text-foreground">
-                        Rs. {(Number(item.price || 0) * (item.quantity || 1)).toLocaleString()}
-                      </span>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center space-y-1">
+                      <p className="font-medium text-foreground">Flame-Grilled Selection</p>
+                      <p className="text-muted-foreground text-[11px]">
+                        {selectedOrder.specialInstructions ? `Special request: ${selectedOrder.specialInstructions}` : "Standard Platter Order"}
+                      </p>
                     </div>
-                  ))
-                ) : (
-                  <div className="p-4 text-center text-muted-foreground">Standard Platter Order</div>
-                )}
-              </div>
+                  )}
+                </div>
 
-              <div className="space-y-1.5 pt-2 border-t border-border font-light">
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Subtotal</span>
-                  <span className="font-mono">Rs. {Number(selectedOrder.subtotal || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Delivery Charge</span>
-                  <span className="font-mono">Rs. {Number(selectedOrder.deliveryFee || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-bold text-sm text-foreground pt-1 border-t border-border">
-                  <span>Grand Total</span>
-                  <span className="font-mono text-primary">
-                    Rs. {Number(selectedOrder.grandTotal || 0).toLocaleString()}
-                  </span>
+                <div className="space-y-1.5 pt-2 border-t border-border font-light">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span className="font-mono">Rs. {Number(selectedOrder.subtotal || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Delivery Charge ({selectedOrder.orderType === "delivery" ? "Lahore City" : "Pickup"})</span>
+                    <span className="font-mono">Rs. {Number(selectedOrder.deliveryFee || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-sm text-foreground pt-1.5 border-t border-border">
+                    <span>Grand Total</span>
+                    <span className="font-mono text-primary text-base">
+                      Rs. {Number(selectedOrder.grandTotal || 0).toLocaleString()} PKR
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           <DialogFooter>
             <Button

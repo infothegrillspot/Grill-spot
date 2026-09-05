@@ -88,6 +88,12 @@ export interface D1Rider {
   updatedAt?: string;
 }
 
+export interface MenuItemOption {
+  id: string;
+  name: string;
+  price: number;
+}
+
 export interface D1MenuItem {
   id: string;
   name: string;
@@ -96,6 +102,7 @@ export interface D1MenuItem {
   description: string;
   image: string;
   features?: string | string[];
+  options?: string | MenuItemOption[]; // Custom options e.g. Double Patty, Triple Patty with prices
   isAvailable: number | boolean; // 1/true or 0/false
   isFeatured?: number | boolean;
   spiceLevel?: string; // "None" | "Mild" | "Medium" | "Hot" | "Extra Spicy"
