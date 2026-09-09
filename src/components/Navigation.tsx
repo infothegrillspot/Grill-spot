@@ -1,15 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Menu,
   X,
   Flame,
-  ShoppingBag,
-  UserPlus,
-  User,
-  Settings,
-  LogOut,
-  ShieldCheck,
   Search,
   Bike,
   Store,
@@ -19,24 +12,11 @@ import {
   MapPin,
   Clock,
   Calendar,
-  Phone,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useCart } from "@/context/CartContext";
-import { useAuth } from "@/context/AuthContext";
-import { EditProfileDialog } from "./EditProfileDialog";
-import { SavedAddressesDialog } from "./SavedAddressesDialog";
-import { OrderHistoryDialog } from "./OrderHistoryDialog";
 import { locations } from "@/data/locations";
 import { toast } from "sonner";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
 
 interface NavigationProps {
   variant?: "default" | "dark";
@@ -47,28 +27,19 @@ interface NavigationProps {
 
 const Navigation = ({
   variant = "default",
-  onOpenAdmin,
-  onOpenAuth,
   onSelectDish,
 }: NavigationProps) => {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isAddressesOpen, setIsAddressesOpen] = useState(false);
-  const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const {
-    totalItems,
-    setIsCartOpen,
     addToCart,
     orderType,
     setOrderType,
     searchQuery,
     setSearchQuery,
   } = useCart();
-  const { user, signOut, isAdmin } = useAuth();
   const isDark = variant === "dark";
 
   useEffect(() => {
@@ -100,7 +71,6 @@ const Navigation = ({
   ];
 
   const scrollToSection = (targetId: string) => {
-    setIsMobileMenuOpen(false);
     const element = document.getElementById(targetId);
     if (element) {
       element.scrollIntoView({ behavior: "smooth" });
@@ -128,7 +98,6 @@ const Navigation = ({
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setIsSearchFocused(false);
-    setIsMobileMenuOpen(false);
     scrollToSection("menu");
   };
 
@@ -148,9 +117,7 @@ const Navigation = ({
         animate={{ y: 0 }}
         transition={{ duration: 0.6 }}
         className={`fixed top-0 left-0 right-0 z-30 transition-all duration-400 ${
-          isMobileMenuOpen
-            ? "bg-foreground"
-            : isDark
+          isDark
             ? isScrolled
               ? "bg-foreground/95 backdrop-blur-lg shadow-soft"
               : "bg-foreground"
@@ -161,16 +128,16 @@ const Navigation = ({
       >
         <div className="container mx-auto px-4 sm:px-6 lg:px-10 py-3 md:py-3.5">
           <div className="flex items-center justify-between gap-3 lg:gap-6">
-            {/* Left Brand and Delivery/Pickup Option */}
-            <div className="flex items-center gap-4 lg:gap-6">
+            {/* Left: Brand Logo */}
+            <div className="flex items-center flex-1 justify-start min-w-0">
               <button
                 type="button"
                 onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                className="flex items-center gap-2 cursor-pointer text-left"
+                className="flex items-center gap-2 cursor-pointer text-left flex-shrink-0"
               >
                 <Flame
                   className={`h-5 w-5 ${
-                    isMobileMenuOpen || isDark || !isScrolled
+                    isDark || !isScrolled
                       ? "text-white"
                       : "text-primary"
                   }`}
@@ -178,7 +145,7 @@ const Navigation = ({
                 <div className="flex flex-col">
                   <span
                     className={`text-sm font-medium tracking-wide leading-none ${
-                      isMobileMenuOpen || isDark || !isScrolled
+                      isDark || !isScrolled
                         ? "text-white"
                         : "text-foreground"
                     }`}
@@ -190,51 +157,14 @@ const Navigation = ({
                   </span>
                 </div>
               </button>
-
-              {/* Delivery / Pickup Segmented Control (Desktop) */}
-              <div
-                className={`hidden md:flex items-center p-0.5 rounded-full border text-[11px] font-medium backdrop-blur-md transition-all ${
-                  isDark || !isScrolled
-                    ? "bg-white/10 border-white/20 text-white"
-                    : "bg-muted/80 border-border text-foreground"
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleSelectDeliveryMode("delivery")}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all cursor-pointer ${
-                    orderType === "delivery"
-                      ? "bg-primary text-primary-foreground shadow-sm font-semibold"
-                      : isDark || !isScrolled
-                      ? "text-white/80 hover:text-white"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Bike className="w-3.5 h-3.5" />
-                  <span>Delivery</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectDeliveryMode("takeaway")}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all cursor-pointer ${
-                    orderType === "takeaway"
-                      ? "bg-primary text-primary-foreground shadow-sm font-semibold"
-                      : isDark || !isScrolled
-                      ? "text-white/80 hover:text-white"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Store className="w-3.5 h-3.5" />
-                  <span>Pickup</span>
-                </button>
-              </div>
             </div>
 
             {/* Center: Search Bar */}
-            <div
-              ref={searchContainerRef}
-              className="relative hidden sm:block flex-1 max-w-xs md:max-w-sm lg:max-w-md"
-            >
+            <div className="flex-initial w-full max-w-xs md:max-w-sm lg:max-w-md flex justify-center mx-2">
+              <div
+                ref={searchContainerRef}
+                className="relative hidden sm:block w-full"
+              >
               <form onSubmit={handleSearchSubmit} className="relative w-full">
                 <Search
                   className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none transition-colors ${
@@ -367,10 +297,49 @@ const Navigation = ({
                 )}
               </AnimatePresence>
             </div>
+          </div>
 
-            {/* Right Action Cluster: Section Links, Cart, Auth/Profile */}
-            <div className="flex items-center gap-3 lg:gap-4">
-              <div className="hidden lg:flex items-center gap-6">
+            {/* Right Action Cluster: Delivery/Pickup Toggle & Section Links */}
+            <div className="flex items-center gap-3 lg:gap-5 flex-1 justify-end min-w-0">
+              {/* Delivery / Pickup Segmented Control (Desktop) */}
+              <div
+                className={`hidden md:flex items-center p-0.5 rounded-full border text-[11px] font-medium backdrop-blur-md transition-all flex-shrink-0 ${
+                  isDark || !isScrolled
+                    ? "bg-white/10 border-white/20 text-white"
+                    : "bg-muted/80 border-border text-foreground"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleSelectDeliveryMode("delivery")}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all cursor-pointer ${
+                    orderType === "delivery"
+                      ? "bg-primary text-primary-foreground shadow-sm font-semibold"
+                      : isDark || !isScrolled
+                      ? "text-white/80 hover:text-white"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Bike className="w-3.5 h-3.5" />
+                  <span>Delivery</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectDeliveryMode("takeaway")}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all cursor-pointer ${
+                    orderType === "takeaway"
+                      ? "bg-primary text-primary-foreground shadow-sm font-semibold"
+                      : isDark || !isScrolled
+                      ? "text-white/80 hover:text-white"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  <span>Pickup</span>
+                </button>
+              </div>
+
+              <div className="hidden lg:flex items-center gap-6 flex-shrink-0">
                 {navLinks.map((item) => (
                   <button
                     key={item.label}
@@ -382,324 +351,10 @@ const Navigation = ({
                   </button>
                 ))}
               </div>
-
-              {/* Cart Drawer Trigger */}
-              <button
-                type="button"
-                onClick={() => setIsCartOpen(true)}
-                className={`relative flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                  isDark || !isScrolled
-                    ? "bg-white/10 hover:bg-white/20 text-white border border-white/20"
-                    : "bg-muted/80 hover:bg-muted text-foreground border border-border"
-                }`}
-              >
-                <ShoppingBag className="w-4 h-4 text-primary" />
-                <span className="hidden sm:inline text-[11px] uppercase tracking-wider">Cart</span>
-                <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-                  {totalItems}
-                </span>
-              </button>
-
-              {/* User Account / Profile Menu */}
-              <div className="flex items-center gap-2">
-                {user ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-full transition-all border ${
-                          isDark || !isScrolled
-                            ? "bg-white/10 border-white/20 text-white hover:bg-white/20"
-                            : "bg-muted/80 border-border text-foreground hover:bg-muted"
-                        }`}
-                      >
-                        <div className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold">
-                          {user.displayName ? user.displayName[0].toUpperCase() : "U"}
-                        </div>
-                        <span className="text-xs font-medium max-w-[80px] truncate hidden md:inline">
-                          {user.displayName || "Account"}
-                        </span>
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="w-56 bg-card border-border p-1.5 shadow-xl"
-                    >
-                      <DropdownMenuLabel className="font-normal px-2 py-1.5">
-                        <div className="flex flex-col space-y-0.5">
-                          <p className="text-xs font-medium text-foreground truncate">
-                            {user.displayName || "Valued Member"}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground truncate">
-                            {user.email}
-                          </p>
-                        </div>
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator className="bg-border" />
-
-                      <DropdownMenuItem
-                        onClick={() => setIsOrdersOpen(true)}
-                        className="text-xs cursor-pointer focus:bg-accent px-2 py-1.5"
-                      >
-                        <Clock className="w-3.5 h-3.5 mr-2 text-primary" />
-                        Order History
-                      </DropdownMenuItem>
-
-                      <DropdownMenuItem
-                        onClick={() => setIsAddressesOpen(true)}
-                        className="text-xs cursor-pointer focus:bg-accent px-2 py-1.5"
-                      >
-                        <MapPin className="w-3.5 h-3.5 mr-2 text-primary" />
-                        Saved Addresses
-                      </DropdownMenuItem>
-
-                      <DropdownMenuItem
-                        onClick={() => setIsProfileOpen(true)}
-                        className="text-xs cursor-pointer focus:bg-accent px-2 py-1.5"
-                      >
-                        <Settings className="w-3.5 h-3.5 mr-2 text-primary" />
-                        Edit Profile
-                      </DropdownMenuItem>
-
-                      {isAdmin && onOpenAdmin && (
-                        <DropdownMenuItem
-                          onClick={onOpenAdmin}
-                          className="text-xs cursor-pointer focus:bg-accent px-2 py-1.5 text-primary font-medium"
-                        >
-                          <ShieldCheck className="w-3.5 h-3.5 mr-2" />
-                          Admin Dashboard
-                        </DropdownMenuItem>
-                      )}
-
-                      <DropdownMenuSeparator className="bg-border" />
-                      <DropdownMenuItem
-                        onClick={() => signOut()}
-                        className="text-xs cursor-pointer focus:bg-destructive/10 text-destructive px-2 py-1.5"
-                      >
-                        <LogOut className="w-3.5 h-3.5 mr-2" />
-                        Sign Out
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={onOpenAuth}
-                    className={`rounded-full text-[11px] uppercase tracking-wider font-normal px-3.5 h-8 ${
-                      isDark || !isScrolled
-                        ? "text-white hover:bg-white/15 hover:text-white"
-                        : "text-foreground hover:bg-black/5 hover:text-foreground"
-                    }`}
-                  >
-                    <UserPlus className="h-3.5 w-3.5 mr-1.5" />
-                    Sign In
-                  </Button>
-                )}
-
-                {/* Mobile Menu Trigger */}
-                <button
-                  className={`min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded-full lg:hidden active:scale-90 transition-transform ${
-                    isMobileMenuOpen || isDark || !isScrolled
-                      ? "text-white"
-                      : "text-foreground"
-                  }`}
-                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                  aria-label="Toggle Menu"
-                >
-                  {isMobileMenuOpen ? (
-                    <X className="h-5 w-5" />
-                  ) : (
-                    <Menu className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
             </div>
           </div>
-
-          {/* Mobile Slide-Down Menu */}
-          <AnimatePresence>
-            {isMobileMenuOpen && (
-              <motion.div
-                initial={{ opacity: 0, clipPath: "inset(0 0 100% 0)" }}
-                animate={{ opacity: 1, clipPath: "inset(0 0 0% 0)" }}
-                exit={{ opacity: 0, clipPath: "inset(0 0 100% 0)" }}
-                transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                className={`lg:hidden mt-4 pb-4 -mx-4 px-4 rounded-b-xl border-t border-white/10 ${
-                  isDark || !isScrolled ? "bg-foreground" : "bg-card"
-                }`}
-              >
-                {/* Mobile Delivery / Pickup Toggle */}
-                <div className="flex items-center gap-2 my-3 p-1 rounded-full bg-white/10 border border-white/15">
-                  <button
-                    type="button"
-                    onClick={() => handleSelectDeliveryMode("delivery")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-medium transition-all ${
-                      orderType === "delivery"
-                        ? "bg-primary text-primary-foreground font-semibold"
-                        : "text-white/80"
-                    }`}
-                  >
-                    <Bike className="w-3.5 h-3.5" />
-                    Delivery
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectDeliveryMode("takeaway")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-medium transition-all ${
-                      orderType === "takeaway"
-                        ? "bg-primary text-primary-foreground font-semibold"
-                        : "text-white/80"
-                    }`}
-                  >
-                    <Store className="w-3.5 h-3.5" />
-                    Pickup
-                  </button>
-                </div>
-
-                {/* Mobile Search Bar */}
-                <form onSubmit={handleSearchSubmit} className="relative mb-3">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search menu items..."
-                    className="w-full h-9 pl-9 pr-4 text-xs rounded-full bg-white/10 border border-white/20 text-white placeholder:text-white/60 outline-none focus:bg-white/20"
-                  />
-                </form>
-
-                <div className="divide-y divide-white/10">
-                  {navLinks.map((item) => (
-                    <button
-                      key={item.label}
-                      type="button"
-                      onClick={() => scrollToSection(item.targetId)}
-                      className="block w-full text-left py-2.5 text-xs uppercase tracking-wider font-normal text-white hover:opacity-80"
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/10">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      setIsCartOpen(true);
-                    }}
-                    className="flex items-center justify-center gap-2 py-2.5 rounded-full text-[11px] uppercase tracking-wider font-normal bg-white/10 text-white border border-white/20"
-                  >
-                    <ShoppingBag className="h-3.5 w-3.5" />
-                    Cart ({totalItems})
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      setIsOrdersOpen(true);
-                    }}
-                    className="flex items-center justify-center gap-1.5 py-2.5 rounded-full text-[11px] uppercase tracking-wider font-normal bg-white/10 text-white border border-white/20"
-                  >
-                    <Clock className="h-3.5 w-3.5" />
-                    Orders
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      setIsAddressesOpen(true);
-                    }}
-                    className="flex items-center justify-center gap-1.5 py-2.5 rounded-full text-[11px] uppercase tracking-wider font-normal bg-white/10 text-white border border-white/20"
-                  >
-                    <MapPin className="h-3.5 w-3.5" />
-                    Addresses
-                  </button>
-
-                  {user ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileMenuOpen(false);
-                        setIsProfileOpen(true);
-                      }}
-                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-full text-[11px] uppercase tracking-wider font-normal bg-white/15 text-white border border-white/30"
-                    >
-                      <User className="h-3.5 w-3.5" />
-                      Profile
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileMenuOpen(false);
-                        if (onOpenAuth) onOpenAuth();
-                      }}
-                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-full text-[11px] uppercase tracking-wider font-normal bg-white/10 text-white border border-white/20"
-                    >
-                      <UserPlus className="h-3.5 w-3.5" />
-                      Sign In
-                    </button>
-                  )}
-                </div>
-
-                {/* Direct Call & WhatsApp Assistance for Lahore mobile users */}
-                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/10">
-                  <a
-                    href="tel:+924235750000"
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[10px] uppercase tracking-wider font-medium bg-primary text-primary-foreground shadow-sm"
-                  >
-                    <Phone className="w-3 h-3" />
-                    Call Kitchen
-                  </a>
-                  <a
-                    href="https://wa.me/923000000000?text=Hi%20The%20Grill%20Spot,%20I'd%20like%20to%20inquire%20about%20my%20order"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[10px] uppercase tracking-wider font-medium bg-emerald-600 text-white shadow-sm"
-                  >
-                    WhatsApp
-                  </a>
-                </div>
-
-                {user && isAdmin && onOpenAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      onOpenAdmin();
-                    }}
-                    className="block w-full mt-2 text-center py-2 rounded-full text-[11px] uppercase tracking-wider text-primary bg-primary/10 border border-primary/20 font-medium"
-                  >
-                    Admin Dashboard
-                  </button>
-                )}
-
-                {user && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      signOut();
-                    }}
-                    className="w-full mt-2 text-center py-2 text-[11px] uppercase tracking-wider text-destructive hover:underline"
-                  >
-                    Sign Out
-                  </button>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       </motion.nav>
-
-      {/* Member Dialog Modals */}
-      <EditProfileDialog open={isProfileOpen} onOpenChange={setIsProfileOpen} />
-      <SavedAddressesDialog open={isAddressesOpen} onOpenChange={setIsAddressesOpen} />
-      <OrderHistoryDialog open={isOrdersOpen} onOpenChange={setIsOrdersOpen} />
     </>
   );
 };
