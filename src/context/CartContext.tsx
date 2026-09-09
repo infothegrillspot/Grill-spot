@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 export interface CartItem {
   id: string;
@@ -12,9 +13,23 @@ export interface CartItem {
 
 export type OrderType = "delivery" | "dinein" | "takeaway";
 
+export interface PendingCartItem {
+  item: {
+    id: string;
+    name: string;
+    price: number;
+    image: string;
+    notes?: string;
+  };
+  quantity: number;
+}
+
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (item: { id: string; name: string; price: number; image: string; notes?: string }, quantity?: number) => void;
+  addToCart: (
+    item: { id: string; name: string; price: number; image: string; notes?: string },
+    quantity?: number
+  ) => boolean;
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
@@ -26,51 +41,124 @@ interface CartContextType {
   setOrderType: (type: OrderType) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+  pendingCartItem: PendingCartItem | null;
+  clearPendingCartItem: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const CART_STORAGE_KEY = "the_grill_spot_cart_lahore";
-
 export const CartProvider = ({ children }: { children: ReactNode }) => {
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(CART_STORAGE_KEY);
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch {
-      // ignore
-    }
-    // Default initial item so cart is ready to preview
-    return [
-      {
-        id: "burgers",
-        name: "Classic Smashed Burger",
-        price: 1450,
-        quantity: 1,
-        image: "/src/assets/menu-burger.jpg",
-        notes: "Double patty, cheddar, spot sauce",
-      },
-    ];
-  });
-
+  const { user, openAuthModal } = useAuth();
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [orderType, setOrderType] = useState<OrderType>("delivery");
   const [searchQuery, setSearchQuery] = useState("");
-
-  useEffect(() => {
+  const [pendingCartItem, setPendingCartItem] = useState<PendingCartItem | null>(() => {
     try {
-      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+      const saved = sessionStorage.getItem("the_grill_spot_pending_cart");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Load user-specific cart when user logs in or changes
+  useEffect(() => {
+    if (user?.uid) {
+      const storageKey = `the_grill_spot_cart_${user.uid}`;
+      try {
+        const savedCart = localStorage.getItem(storageKey);
+        let currentItems: CartItem[] = savedCart ? JSON.parse(savedCart) : [];
+
+        // If there was a pending item from before sign-in/sign-up, add it now!
+        if (pendingCartItem) {
+          const { item, quantity } = pendingCartItem;
+          const existingIndex = currentItems.findIndex((i) => i.id === item.id);
+          if (existingIndex > -1) {
+            currentItems = currentItems.map((i, idx) =>
+              idx === existingIndex ? { ...i, quantity: i.quantity + quantity } : i
+            );
+          } else {
+            currentItems = [...currentItems, { ...item, quantity }];
+          }
+
+          toast.success(`Added ${quantity}x ${item.name} to your cart!`, {
+            description: `Welcome, ${user.displayName || "Customer"}! Your selection has been saved.`,
+          });
+
+          // Clear pending item
+          setPendingCartItem(null);
+          try {
+            sessionStorage.removeItem("the_grill_spot_pending_cart");
+          } catch {
+            // ignore
+          }
+
+          // Automatically open cart drawer so user sees their added item
+          setIsCartOpen(true);
+        }
+
+        setCart(currentItems);
+      } catch (err) {
+        console.warn("Failed loading saved cart:", err);
+        setCart([]);
+      }
+    } else {
+      // User signed out or not logged in: cart is empty
+      setCart([]);
+    }
+  }, [user?.uid, user?.displayName, pendingCartItem]);
+
+  // Save cart to user's storage key whenever cart changes
+  useEffect(() => {
+    if (user?.uid) {
+      const storageKey = `the_grill_spot_cart_${user.uid}`;
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(cart));
+      } catch {
+        // ignore
+      }
+    }
+  }, [cart, user?.uid]);
+
+  const clearPendingCartItem = () => {
+    setPendingCartItem(null);
+    try {
+      sessionStorage.removeItem("the_grill_spot_pending_cart");
     } catch {
       // ignore
     }
-  }, [cart]);
+  };
 
   const addToCart = (
     item: { id: string; name: string; price: number; image: string; notes?: string },
     quantity: number = 1
-  ) => {
+  ): boolean => {
+    // Gate add-to-cart: User MUST be signed in or signed up!
+    if (!user) {
+      const pending: PendingCartItem = { item, quantity };
+      setPendingCartItem(pending);
+      try {
+        sessionStorage.setItem("the_grill_spot_pending_cart", JSON.stringify(pending));
+      } catch {
+        // ignore
+      }
+
+      openAuthModal(`Sign in with Google to add ${item.name} to your cart.`);
+
+      toast.info("Sign in with Google to add to cart", {
+        description: `Sign in with Google to add ${quantity}x ${item.name} (Rs. ${(item.price * quantity).toLocaleString()}) and customize your order.`,
+        action: {
+          label: "Google Sign-In",
+          onClick: () => openAuthModal(`Sign in with Google to add ${item.name} to your cart.`),
+        },
+        duration: 6000,
+      });
+
+      return false;
+    }
+
+    // User is logged in: proceed with normal add
     setCart((prevCart) => {
       const existingIndex = prevCart.findIndex((i) => i.id === item.id);
       if (existingIndex > -1) {
@@ -87,6 +175,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     toast.success(`Added ${quantity}x ${item.name} to cart`, {
       description: `Rs. ${(item.price * quantity).toLocaleString()}`,
     });
+
+    return true;
   };
 
   const removeFromCart = (id: string) => {
@@ -105,6 +195,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   const clearCart = () => {
     setCart([]);
+    if (user?.uid) {
+      try {
+        localStorage.removeItem(`the_grill_spot_cart_${user.uid}`);
+      } catch {
+        // ignore
+      }
+    }
   };
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -126,6 +223,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setOrderType,
         searchQuery,
         setSearchQuery,
+        pendingCartItem,
+        clearPendingCartItem,
       }}
     >
       {children}

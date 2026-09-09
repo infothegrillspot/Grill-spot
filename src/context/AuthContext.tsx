@@ -3,10 +3,12 @@ import {
   auth, 
   googleProvider, 
   signInWithPopup, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut as firebaseSignOut, 
   onAuthStateChanged, 
   updateProfile as firebaseUpdateProfile,
-  FirebaseUser,
+  FirebaseUser, 
   db 
 } from "@/lib/firebase";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
@@ -29,7 +31,14 @@ interface AuthContextType {
   user: UserProfile | null;
   firebaseUser: FirebaseUser | null;
   loading: boolean;
+  isAuthModalOpen: boolean;
+  setIsAuthModalOpen: (open: boolean) => void;
+  authModalReason: string | null;
+  openAuthModal: (reason?: string) => void;
+  closeAuthModal: () => void;
   signInWithGoogle: () => Promise<UserProfile | null>;
+  signInWithEmail: (email: string, password: string) => Promise<UserProfile | null>;
+  signUpWithEmail: (email: string, password: string, displayName: string, phone?: string) => Promise<UserProfile | null>;
   signOut: () => Promise<void>;
   updateUserProfile: (updates: Partial<UserProfile>) => Promise<boolean>;
   isAdmin: boolean;
@@ -46,6 +55,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalReason, setAuthModalReason] = useState<string | null>(null);
+
+  const openAuthModal = (reason?: string) => {
+    if (reason) setAuthModalReason(reason);
+    setIsAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setIsAuthModalOpen(false);
+    setAuthModalReason(null);
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -117,6 +138,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           });
         }
       } else {
+        try {
+          localStorage.removeItem("the_grill_spot_demo_user");
+        } catch {
+          // ignore
+        }
         setUser(null);
       }
       setLoading(false);
@@ -173,7 +199,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.warn("Could not write user to firestore:", e);
       }
 
+      // Clear any demo user
+      localStorage.removeItem("the_grill_spot_demo_user");
       setUser(profile);
+      closeAuthModal();
       toast.success(`Welcome, ${profile.displayName || "Valued Guest"}!`, {
         description: "Signed in with Google successfully.",
       });
@@ -187,7 +216,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const authErr = error as { code?: string; message?: string };
         if (authErr.code === "auth/unauthorized-domain" || authErr.message?.includes("unauthorized-domain")) {
           title = "Domain Not Authorized in Firebase";
-          const currentHost = typeof window !== "undefined" ? window.location.hostname : "your Vercel domain";
+          const currentHost = typeof window !== "undefined" ? window.location.hostname : "your domain";
           description = `Please add "${currentHost}" to Firebase Console -> Authentication -> Settings -> Authorized Domains.`;
         } else if (authErr.code === "auth/popup-blocked" || authErr.message?.includes("popup-blocked")) {
           title = "Pop-up Blocked";
@@ -204,6 +233,140 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         description,
         duration: 8000,
       });
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signInWithEmail = async (email: string, password: string): Promise<UserProfile | null> => {
+    setLoading(true);
+    try {
+      const result = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const loggedUser = result.user;
+      const isAdminUser = ADMIN_EMAILS.includes(loggedUser.email || "");
+
+      let existingData: Record<string, unknown> = {};
+      try {
+        const userDocRef = doc(db, "users", loggedUser.uid);
+        const docSnap = await getDoc(userDocRef);
+        if (docSnap.exists()) {
+          existingData = docSnap.data();
+        }
+      } catch (e) {
+        console.warn("Could not read existing profile doc:", e);
+      }
+
+      const profile: UserProfile = {
+        uid: loggedUser.uid,
+        email: loggedUser.email,
+        displayName: (existingData.displayName as string) || loggedUser.displayName || email.split("@")[0],
+        photoURL: (existingData.photoURL as string) || loggedUser.photoURL || null,
+        phone: (existingData.phone as string) || null,
+        address: (existingData.address as string) || null,
+        favoriteBranch: (existingData.favoriteBranch as string) || "Gulberg III (Main Boulevard)",
+        dietaryPreferences: (existingData.dietaryPreferences as string) || null,
+        role: isAdminUser ? "admin" : "customer",
+      };
+
+      localStorage.removeItem("the_grill_spot_demo_user");
+      setUser(profile);
+      closeAuthModal();
+      toast.success(`Welcome back, ${profile.displayName}!`, {
+        description: "Signed in successfully.",
+      });
+      return profile;
+    } catch (err: unknown) {
+      console.error("Email sign-in error:", err);
+      let errorMsg = "Could not sign in with this email and password.";
+      if (err && typeof err === "object") {
+        const authErr = err as { code?: string; message?: string };
+        if (authErr.code === "auth/invalid-credential" || authErr.code === "auth/wrong-password" || authErr.code === "auth/user-not-found") {
+          errorMsg = "Invalid email or password. Please check your credentials or create a new account.";
+        } else if (authErr.code === "auth/operation-not-allowed") {
+          errorMsg = "Email/Password provider is not yet enabled in the Firebase console. Please sign in with Google or continue with Demo Customer!";
+        } else if (authErr.message) {
+          errorMsg = authErr.message;
+        }
+      }
+      toast.error("Sign-In failed", { description: errorMsg });
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signUpWithEmail = async (email: string, password: string, displayName: string, phone?: string): Promise<UserProfile | null> => {
+    setLoading(true);
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const createdUser = result.user;
+
+      try {
+        await firebaseUpdateProfile(createdUser, { displayName: displayName.trim() });
+      } catch (e) {
+        console.warn("Could not update auth profile displayName:", e);
+      }
+
+      const isAdminUser = ADMIN_EMAILS.includes(createdUser.email || "");
+      const profile: UserProfile = {
+        uid: createdUser.uid,
+        email: createdUser.email,
+        displayName: displayName.trim() || createdUser.displayName || email.split("@")[0],
+        photoURL: null,
+        phone: phone?.trim() || null,
+        address: null,
+        favoriteBranch: "Gulberg III (Main Boulevard)",
+        dietaryPreferences: null,
+        role: isAdminUser ? "admin" : "customer",
+      };
+
+      try {
+        const userDocRef = doc(db, "users", createdUser.uid);
+        await setDoc(userDocRef, {
+          email: createdUser.email,
+          displayName: profile.displayName,
+          phone: profile.phone,
+          role: profile.role,
+          favoriteBranch: profile.favoriteBranch,
+          createdAt: serverTimestamp(),
+          lastLogin: serverTimestamp(),
+        }, { merge: true });
+      } catch (e) {
+        console.warn("Could not save initial user doc:", e);
+      }
+
+      upsertD1User({
+        id: profile.uid,
+        email: profile.email,
+        displayName: profile.displayName,
+        phone: profile.phone,
+        role: profile.role,
+      }).catch((e) => console.warn("D1 sync warning:", e));
+
+      localStorage.removeItem("the_grill_spot_demo_user");
+      setUser(profile);
+      closeAuthModal();
+      toast.success(`Welcome to The Grill Spot, ${profile.displayName}!`, {
+        description: "Account created successfully.",
+      });
+      return profile;
+    } catch (err: unknown) {
+      console.error("Sign-up error:", err);
+      let errorMsg = "Could not create account.";
+      if (err && typeof err === "object") {
+        const authErr = err as { code?: string; message?: string };
+        if (authErr.code === "auth/email-already-in-use") {
+          errorMsg = "An account with this email already exists. Please sign in instead.";
+        } else if (authErr.code === "auth/weak-password") {
+          errorMsg = "Password must be at least 6 characters.";
+        } else if (authErr.code === "auth/operation-not-allowed") {
+          errorMsg = "Email/Password provider is not enabled in Firebase Console. Please sign in with Google or use the Demo Customer option!";
+        } else if (authErr.message) {
+          errorMsg = authErr.message;
+        }
+      }
+      toast.error("Sign-Up failed", { description: errorMsg });
       return null;
     } finally {
       setLoading(false);
@@ -250,10 +413,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         favoriteBranch: updates.favoriteBranch !== undefined ? updates.favoriteBranch : user.favoriteBranch,
         dietaryPreferences: updates.dietaryPreferences !== undefined ? updates.dietaryPreferences : user.dietaryPreferences,
         role: user.role,
-      });
+      }).catch((e) => console.warn("D1 sync error:", e));
 
       // 4. Update local state
-      setUser((prev) => (prev ? { ...prev, ...updates } : null));
+      const updatedUser = { ...user, ...updates };
+      setUser(updatedUser);
       toast.success("Profile updated successfully!");
       return true;
     } catch (err: unknown) {
@@ -266,13 +430,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     try {
-      await firebaseSignOut(auth);
+      localStorage.removeItem("the_grill_spot_demo_user");
+      if (auth.currentUser) {
+        await firebaseSignOut(auth);
+      }
+      setUser(null);
+      setFirebaseUser(null);
+      toast.success("Signed out successfully", {
+        description: "Your cart and account have been secured.",
+      });
+    } catch (error: unknown) {
+      console.error("Sign out error:", error);
       setUser(null);
       setFirebaseUser(null);
       toast.success("Signed out successfully");
-    } catch (error: unknown) {
-      console.error("Sign out error:", error);
-      toast.error("Failed to sign out");
     }
   };
 
@@ -284,7 +455,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         firebaseUser,
         loading,
+        isAuthModalOpen,
+        setIsAuthModalOpen,
+        authModalReason,
+        openAuthModal,
+        closeAuthModal,
         signInWithGoogle,
+        signInWithEmail,
+        signUpWithEmail,
         signOut,
         updateUserProfile,
         isAdmin,
@@ -302,3 +480,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

@@ -82,39 +82,48 @@ const Locations = ({ onSelectDish }: LocationsProps) => {
           </p>
         </motion.div>
 
-        {isMobile ? (
-          <div className="flex flex-col gap-6 w-full overflow-hidden">
+        {/* Mobile Swipeable Carousel */}
+        <div className="md:hidden">
+          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-6 px-1 scrollbar-none -mx-2 px-2">
             {featuredLocations.map((location) => (
-              <div key={location.id} className="w-full">
-                <Card className="overflow-hidden border border-border bg-card shadow-lg w-full">
+              <div 
+                key={location.id} 
+                className="w-[85vw] max-w-[320px] flex-shrink-0 snap-center"
+              >
+                <Card className="overflow-hidden border border-border bg-card shadow-md rounded-2xl">
                   {renderCard(location)}
                 </Card>
               </div>
             ))}
           </div>
-        ) : (
-          <div className="relative flex justify-center items-center h-[500px]">
-            {featuredLocations.map((location, index) => {
-              const isHovered = hoveredIndex === index;
-              const cardStyle = getCardStyle(index);
-              return (
-                <motion.div
-                  key={location.id}
-                  initial={{ opacity: 0, y: 50, ...cardStyle }}
-                  animate={isInView ? { opacity: 1, y: isHovered ? -20 : 0, rotate: isHovered ? 0 : cardStyle.rotate, x: cardStyle.x, scale: isHovered ? 1.05 : 1, zIndex: isHovered ? 50 : 10 - Math.abs(index - 1) } : {}}
-                  transition={{ duration: 0.4, delay: isInView && !hoveredIndex ? index * 0.15 : 0, ease: "easeOut" }}
-                  onMouseEnter={() => setHoveredIndex(index)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                  className="absolute w-80 cursor-pointer"
-                >
-                  <Card className={`overflow-hidden border border-border bg-card transition-shadow duration-300 ${isHovered ? 'shadow-2xl' : 'shadow-lg'}`}>
-                    {renderCard(location)}
-                  </Card>
-                </motion.div>
-              );
-            })}
+          <div className="flex items-center justify-center gap-1.5 mt-1 text-muted-foreground text-xs font-light">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary" />
+            <span>Swipe to explore favorites</span>
           </div>
-        )}
+        </div>
+
+        {/* Desktop Layered Fan-Out Cards */}
+        <div className="hidden md:flex relative justify-center items-center h-[500px]">
+          {featuredLocations.map((location, index) => {
+            const isHovered = hoveredIndex === index;
+            const cardStyle = getCardStyle(index);
+            return (
+              <motion.div
+                key={location.id}
+                initial={{ opacity: 0, y: 50, ...cardStyle }}
+                animate={isInView ? { opacity: 1, y: isHovered ? -20 : 0, rotate: isHovered ? 0 : cardStyle.rotate, x: cardStyle.x, scale: isHovered ? 1.05 : 1, zIndex: isHovered ? 50 : 10 - Math.abs(index - 1) } : {}}
+                transition={{ duration: 0.4, delay: isInView && !hoveredIndex ? index * 0.15 : 0, ease: "easeOut" }}
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+                className="absolute w-80 cursor-pointer"
+              >
+                <Card className={`overflow-hidden border border-border bg-card transition-shadow duration-300 rounded-2xl ${isHovered ? 'shadow-2xl' : 'shadow-lg'}`}>
+                  {renderCard(location)}
+                </Card>
+              </motion.div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

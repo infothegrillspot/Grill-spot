@@ -1,5 +1,15 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, updateProfile, User as FirebaseUser } from "firebase/auth";
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut, 
+  onAuthStateChanged, 
+  updateProfile, 
+  User as FirebaseUser 
+} from "firebase/auth";
 import { getFirestore, doc, getDocFromServer } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
 
@@ -33,6 +43,13 @@ export async function testFirestoreConnection() {
 // Trigger initial connection test asynchronously
 testFirestoreConnection();
 
-export { signInWithPopup, signOut, onAuthStateChanged, updateProfile };
+export { 
+  signInWithPopup, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged, 
+  updateProfile 
+};
 export type { FirebaseUser };
 export default app;

@@ -67,15 +67,15 @@ const Hero = () => {
       </AnimatePresence>
 
       {/* Bottom-Left Text Content */}
-      <div className="absolute bottom-20 left-6 md:left-12 lg:left-16 z-10 text-white">
+      <div className="absolute bottom-24 sm:bottom-20 left-5 sm:left-6 md:left-12 lg:left-16 z-10 text-white pr-4">
         {/* Flame Icon */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.5 }}
-          className="mb-4"
+          className="mb-3 sm:mb-4"
         >
-          <Flame className="w-6 h-6 text-white stroke-[1.5]" />
+          <Flame className="w-5 h-5 sm:w-6 sm:h-6 text-white stroke-[1.5]" />
         </motion.div>
 
         {/* Headline */}
@@ -83,7 +83,7 @@ const Hero = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.6 }}
-          className="text-4xl md:text-5xl lg:text-6xl font-light tracking-tight max-w-md text-left flex flex-col"
+          className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-light tracking-tight max-w-md text-left flex flex-col leading-tight"
         >
           <span>Fired Up.</span>
           <span>Served Fresh.</span>
@@ -100,28 +100,30 @@ const Hero = () => {
               menuEl.scrollIntoView({ behavior: "smooth" });
             }
           }}
-          className="mt-6 flex items-center gap-3 bg-white text-foreground px-6 py-3 rounded-full text-sm tracking-wide hover:bg-white/90 transition-colors cursor-pointer"
+          className="mt-5 sm:mt-6 flex items-center gap-2.5 bg-white text-foreground px-5 sm:px-6 py-3 sm:py-3.5 rounded-full text-xs sm:text-sm font-medium tracking-wide hover:bg-white/90 active:scale-95 transition-all cursor-pointer shadow-lg min-h-[44px]"
         >
-          Explore Menu & Order
+          <span>Explore Menu & Order</span>
           <ArrowRight className="w-4 h-4" />
         </motion.button>
       </div>
 
       {/* Progress Bars */}
-      <div className="absolute bottom-8 left-6 md:left-12 lg:left-16 right-6 md:right-12 lg:right-16 z-10 flex gap-2">
+      <div className="absolute bottom-9 sm:bottom-8 left-5 sm:left-6 md:left-12 lg:left-16 right-5 sm:right-6 md:right-12 lg:right-16 z-10 flex gap-2">
         {slides.map((_, index) => (
           <button
             key={index}
             onClick={() => goToSlide(index)}
-            className="flex-1 h-[2px] bg-white/30 overflow-hidden cursor-pointer"
+            className="flex-1 py-2 -my-2 h-[2px] bg-transparent overflow-visible cursor-pointer flex items-center"
             aria-label={`Go to slide ${index + 1}`}
           >
-            <div
-              className="h-full bg-white transition-all duration-100 ease-linear"
-              style={{
-                width: index === currentSlide ? `${progress}%` : index < currentSlide ? "100%" : "0%",
-              }}
-            />
+            <div className="w-full h-[2px] bg-white/30 overflow-hidden">
+              <div
+                className="h-full bg-white transition-all duration-100 ease-linear"
+                style={{
+                  width: index === currentSlide ? `${progress}%` : index < currentSlide ? "100%" : "0%",
+                }}
+              />
+            </div>
           </button>
         ))}
       </div>

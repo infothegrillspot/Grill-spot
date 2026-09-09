@@ -19,6 +19,7 @@ import {
   MapPin,
   Clock,
   Calendar,
+  Phone,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useCart } from "@/context/CartContext";
@@ -335,7 +336,6 @@ const Navigation = ({
                                   image: item.image,
                                   notes: item.features.slice(0, 2).join(", "),
                                 });
-                                toast.success(`Added ${item.name} to cart!`);
                               }}
                             >
                               <Plus className="w-3 h-3 mr-1" />
@@ -499,7 +499,7 @@ const Navigation = ({
 
                 {/* Mobile Menu Trigger */}
                 <button
-                  className={`p-1.5 lg:hidden ${
+                  className={`min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded-full lg:hidden active:scale-90 transition-transform ${
                     isMobileMenuOpen || isDark || !isScrolled
                       ? "text-white"
                       : "text-foreground"
@@ -644,6 +644,25 @@ const Navigation = ({
                       Sign In
                     </button>
                   )}
+                </div>
+
+                {/* Direct Call & WhatsApp Assistance for Lahore mobile users */}
+                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/10">
+                  <a
+                    href="tel:+924235750000"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[10px] uppercase tracking-wider font-medium bg-primary text-primary-foreground shadow-sm"
+                  >
+                    <Phone className="w-3 h-3" />
+                    Call Kitchen
+                  </a>
+                  <a
+                    href="https://wa.me/923000000000?text=Hi%20The%20Grill%20Spot,%20I'd%20like%20to%20inquire%20about%20my%20order"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-[10px] uppercase tracking-wider font-medium bg-emerald-600 text-white shadow-sm"
+                  >
+                    WhatsApp
+                  </a>
                 </div>
 
                 {user && isAdmin && onOpenAdmin && (

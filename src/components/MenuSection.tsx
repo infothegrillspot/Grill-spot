@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { locations, Location } from "@/data/locations";
 import { useCart } from "@/context/CartContext";
-import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 interface MenuSectionProps {
   onSelectDish: (dishId: string) => void;
@@ -40,6 +40,7 @@ export const MenuSection = ({ onSelectDish }: MenuSectionProps) => {
   const [selectedCategory, setSelectedCategory] = useState("All Items");
   const [sortBy, setSortBy] = useState<SortOption>("popular");
   const { searchQuery, setSearchQuery, addToCart, setIsCartOpen } = useCart();
+  const { user } = useAuth();
 
   const activeQuery = searchQuery.trim().toLowerCase();
 
@@ -103,7 +104,6 @@ export const MenuSection = ({ onSelectDish }: MenuSectionProps) => {
       image: item.image,
       notes: item.features.slice(0, 2).join(", "),
     });
-    toast.success(`Added ${item.name} to cart!`);
   };
 
   return (
@@ -123,16 +123,39 @@ export const MenuSection = ({ onSelectDish }: MenuSectionProps) => {
           </p>
         </div>
 
+        {/* Search & Filter Bar */}
+        <div className="mb-6 max-w-md mx-auto sm:max-w-none">
+          <div className="relative w-full">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search burgers, tikkas, shawarma, pizza..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-10 py-2.5 bg-card border border-border rounded-full text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Category Pills & Controls */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           {/* Categories */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 md:pb-0 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-4 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
+                className={`px-4 py-2.5 rounded-full text-xs font-medium transition-all whitespace-nowrap cursor-pointer active:scale-95 min-h-[40px] flex items-center ${
                   selectedCategory === cat
                     ? "bg-primary text-primary-foreground shadow-sm font-semibold"
                     : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -144,7 +167,7 @@ export const MenuSection = ({ onSelectDish }: MenuSectionProps) => {
           </div>
 
           {/* Sort & Count */}
-          <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
+          <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0 pt-1 md:pt-0">
             <span className="text-xs text-muted-foreground font-light">
               Showing <span className="font-medium text-foreground">{filteredLocations.length}</span> dishes
             </span>

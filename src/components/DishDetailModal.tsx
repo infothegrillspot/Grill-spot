@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { Location, locations } from "@/data/locations";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
 interface DishDetailModalProps {
@@ -34,6 +35,7 @@ interface DishDetailModalProps {
 
 export const DishDetailModal = ({ dishId, isOpen, onClose }: DishDetailModalProps) => {
   const { addToCart, setIsCartOpen } = useCart();
+  const { user } = useAuth();
   const dish = dishId ? locations.find((item) => item.id === dishId) : null;
   const [quantity, setQuantity] = useState(1);
   const [specialNotes, setSpecialNotes] = useState("");
@@ -67,18 +69,21 @@ export const DishDetailModal = ({ dishId, isOpen, onClose }: DishDetailModalProp
       .filter(Boolean)
       .join(" • ");
 
-    for (let i = 0; i < quantity; i++) {
-      addToCart({
-        id: itemCartId,
-        name: itemName,
-        price: unitPrice,
-        image: dish.image,
-        notes: itemNotes,
-      });
+    const added = addToCart({
+      id: itemCartId,
+      name: itemName,
+      price: unitPrice,
+      image: dish.image,
+      notes: itemNotes,
+    }, quantity);
+
+    if (added) {
+      setIsCartOpen(true);
+      onClose();
+    } else {
+      // Unauthenticated: CartContext triggered AuthModal and remembered pending selection
+      onClose();
     }
-    toast.success(`Added ${quantity}x ${itemName} to cart!`);
-    setIsCartOpen(true);
-    onClose();
   };
 
   const nextImg = () => {
@@ -259,25 +264,25 @@ export const DishDetailModal = ({ dishId, isOpen, onClose }: DishDetailModalProp
             />
           </div>
 
-          {/* Bottom Action: Quantity & Add to Cart */}
-          <div className="pt-2 border-t border-border flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 bg-muted/50 border border-border p-1 rounded-full">
+          {/* Sticky Bottom Action: Quantity & Add to Cart */}
+          <div className="sticky bottom-0 bg-card/95 backdrop-blur-md pt-3 pb-3 border-t border-border flex items-center justify-between gap-3 -mx-6 px-6 shadow-lg z-20">
+            <div className="flex items-center gap-2 bg-muted/60 border border-border p-1 rounded-full">
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="h-8 w-8 rounded-full"
+                className="h-9 w-9 sm:h-8 sm:w-8 rounded-full min-h-[36px] min-w-[36px]"
               >
                 <Minus className="w-3.5 h-3.5" />
               </Button>
-              <span className="text-sm font-semibold w-6 text-center">{quantity}</span>
+              <span className="text-sm font-semibold w-7 text-center">{quantity}</span>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 onClick={() => setQuantity(quantity + 1)}
-                className="h-8 w-8 rounded-full"
+                className="h-9 w-9 sm:h-8 sm:w-8 rounded-full min-h-[36px] min-w-[36px]"
               >
                 <Plus className="w-3.5 h-3.5" />
               </Button>
@@ -286,10 +291,12 @@ export const DishDetailModal = ({ dishId, isOpen, onClose }: DishDetailModalProp
             <Button
               type="button"
               onClick={handleAddToCart}
-              className="flex-1 h-11 bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-xs uppercase tracking-wider rounded-full shadow-md flex items-center justify-center gap-2"
+              className="flex-1 h-11 sm:h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-xs uppercase tracking-wider rounded-full shadow-md flex items-center justify-center gap-2 min-h-[44px]"
             >
               <ShoppingBag className="w-4 h-4" />
-              Add to Order • Rs. {totalPrice.toLocaleString()}
+              <span className="truncate">
+                {user ? `Add to Order • Rs. ${totalPrice.toLocaleString()}` : `Sign In with Google • Rs. ${totalPrice.toLocaleString()}`}
+              </span>
             </Button>
           </div>
         </div>

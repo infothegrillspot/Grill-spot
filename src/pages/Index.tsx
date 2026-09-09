@@ -10,18 +10,20 @@ import Footer from "@/components/Footer";
 import { DishDetailModal } from "@/components/DishDetailModal";
 import { AdminModal } from "@/components/AdminModal";
 import { AuthModal } from "@/components/AuthModal";
+import { MobileBottomBar } from "@/components/MobileBottomBar";
+import { useAuth } from "@/context/AuthContext";
 
 const Index = () => {
   const [selectedDishId, setSelectedDishId] = useState<string | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const { isAuthModalOpen, openAuthModal, closeAuthModal } = useAuth();
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-background">
+    <div className="min-h-screen overflow-x-hidden bg-background pb-20 lg:pb-0">
       {/* Top Navbar */}
       <Navigation
         onOpenAdmin={() => setIsAdminOpen(true)}
-        onOpenAuth={() => setIsAuthOpen(true)}
+        onOpenAuth={() => openAuthModal()}
         onSelectDish={(id) => setSelectedDishId(id)}
       />
 
@@ -46,6 +48,9 @@ const Index = () => {
       {/* Footer */}
       <Footer onOpenAdmin={() => setIsAdminOpen(true)} />
 
+      {/* Mobile Floating Bottom Bar (App-like quick access for mobile users) */}
+      <MobileBottomBar onOpenAuth={() => openAuthModal()} />
+
       {/* Single-Page Modals & Dialogs (No route changes) */}
       <DishDetailModal
         dishId={selectedDishId}
@@ -59,8 +64,8 @@ const Index = () => {
       />
 
       <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
+        isOpen={isAuthModalOpen}
+        onClose={closeAuthModal}
         onOpenAdmin={() => setIsAdminOpen(true)}
       />
     </div>
