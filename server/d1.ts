@@ -399,6 +399,21 @@ function handleMemoryFallback<T = Record<string, unknown>>(sql: string, params: 
         const revenue = allOrders.reduce((sum, o) => sum + (Number(o.grandTotal) || 0), 0);
         return [{ count: allOrders.length, revenue }] as unknown as T[];
       }
+      if (lowerSql.includes("where userid = ? or (customeremail is not null and customeremail = ?)") || lowerSql.includes("where userid = ? or customeremail = ?")) {
+        const userId = String(params[0] || "");
+        const email = String(params[1] || "").toLowerCase();
+        return allOrders.filter(
+          (o) =>
+            (userId && o.userId === userId) ||
+            (email && typeof o.customerEmail === "string" && o.customerEmail.toLowerCase() === email)
+        ) as unknown as T[];
+      }
+      if (lowerSql.includes("where customeremail = ?") || lowerSql.includes("where customeremail =")) {
+        const email = String(params[0] || "").toLowerCase();
+        return allOrders.filter(
+          (o) => typeof o.customerEmail === "string" && o.customerEmail.toLowerCase() === email
+        ) as unknown as T[];
+      }
       if (lowerSql.includes("where userid = ?") || lowerSql.includes("where userid =")) {
         const userId = String(params[0] || "");
         return allOrders.filter((o) => o.userId === userId) as unknown as T[];
@@ -496,26 +511,49 @@ function handleMemoryFallback<T = Record<string, unknown>>(sql: string, params: 
   if (lowerSql.startsWith("insert into orders")) {
     const id = String(params[0]);
     const now = new Date().toISOString();
-    const order: Record<string, unknown> = {
-      id,
-      userId: params[1] ?? null,
-      customerName: params[2] ?? "Guest",
-      phone: params[3] ?? "",
-      orderType: params[4] ?? "delivery",
-      subtotal: Number(params[5] || 0),
-      deliveryFee: Number(params[6] || 0),
-      grandTotal: Number(params[7] || 0),
-      address: params[8] ?? "",
-      specialInstructions: params[9] ?? "",
-      status: params[10] ?? "pending",
-      itemsJson: params[11] ?? "[]",
-      riderId: params[12] ?? null,
-      riderName: params[13] ?? null,
-      riderPhone: params[14] ?? null,
-      allocatedAt: params[15] ?? null,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const hasCustomerEmail = lowerSql.includes("customeremail");
+    const order: Record<string, unknown> = hasCustomerEmail
+      ? {
+          id,
+          userId: params[1] ?? null,
+          customerName: params[2] ?? "Guest",
+          customerEmail: params[3] ?? null,
+          phone: params[4] ?? "",
+          orderType: params[5] ?? "delivery",
+          subtotal: Number(params[6] || 0),
+          deliveryFee: Number(params[7] || 0),
+          grandTotal: Number(params[8] || 0),
+          address: params[9] ?? "",
+          specialInstructions: params[10] ?? "",
+          status: params[11] ?? "pending",
+          itemsJson: params[12] ?? "[]",
+          riderId: params[13] ?? null,
+          riderName: params[14] ?? null,
+          riderPhone: params[15] ?? null,
+          allocatedAt: params[16] ?? null,
+          createdAt: now,
+          updatedAt: now,
+        }
+      : {
+          id,
+          userId: params[1] ?? null,
+          customerName: params[2] ?? "Guest",
+          phone: params[3] ?? "",
+          orderType: params[4] ?? "delivery",
+          subtotal: Number(params[5] || 0),
+          deliveryFee: Number(params[6] || 0),
+          grandTotal: Number(params[7] || 0),
+          address: params[8] ?? "",
+          specialInstructions: params[9] ?? "",
+          status: params[10] ?? "pending",
+          itemsJson: params[11] ?? "[]",
+          riderId: params[12] ?? null,
+          riderName: params[13] ?? null,
+          riderPhone: params[14] ?? null,
+          allocatedAt: params[15] ?? null,
+          createdAt: now,
+          updatedAt: now,
+        };
     memoryStore.orders.set(id, order);
     return [order] as unknown as T[];
   }
@@ -880,6 +918,7 @@ export async function initializeD1Database(): Promise<void> {
     const orderColumns: Array<{ name: string; type: string; defaultVal?: string }> = [
       { name: "userId", type: "TEXT" },
       { name: "customerName", type: "TEXT" },
+      { name: "customerEmail", type: "TEXT" },
       { name: "phone", type: "TEXT" },
       { name: "orderType", type: "TEXT", defaultVal: "'delivery'" },
       { name: "subtotal", type: "REAL", defaultVal: "0" },

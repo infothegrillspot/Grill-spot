@@ -20,9 +20,8 @@ interface MobileBottomBarProps {
 }
 
 export const MobileBottomBar = ({ onOpenAuth }: MobileBottomBarProps) => {
-  const { totalItems, subtotal, setIsCartOpen, isCartOpen } = useCart();
+  const { totalItems, subtotal, setIsCartOpen, isCartOpen, isOrdersOpen, setIsOrdersOpen } = useCart();
   const { user } = useAuth();
-  const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const scrollToSection = (id: string) => {
@@ -123,11 +122,25 @@ export const MobileBottomBar = ({ onOpenAuth }: MobileBottomBarProps) => {
 
             {/* Orders */}
             <button
+              id="mobile-dock-orders-btn"
               type="button"
+              aria-label="View order history"
               onClick={() => setIsOrdersOpen(true)}
-              className="flex-1 flex flex-col items-center justify-center py-1.5 px-1 min-h-[44px] text-muted-foreground hover:text-foreground active:text-primary transition-colors cursor-pointer"
+              className={`flex-1 flex flex-col items-center justify-center py-1.5 px-1 min-h-[44px] transition-all cursor-pointer relative active:scale-95 ${
+                isOrdersOpen
+                  ? "text-primary font-semibold"
+                  : "text-muted-foreground hover:text-foreground active:text-primary"
+              }`}
             >
-              <Clock className="w-4 h-4 mb-1 text-foreground" />
+              <div className="relative">
+                <Clock className={`w-4 h-4 mb-1 transition-transform ${isOrdersOpen ? "text-primary scale-110" : "text-foreground"}`} />
+                {user && (
+                  <span
+                    title="Cloudflare D1 Synced"
+                    className="absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-card shadow-sm animate-pulse"
+                  />
+                )}
+              </div>
               <span className="text-[10px] font-medium tracking-tight">Orders</span>
             </button>
 

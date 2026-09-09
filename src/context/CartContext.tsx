@@ -37,6 +37,8 @@ interface CartContextType {
   subtotal: number;
   isCartOpen: boolean;
   setIsCartOpen: (isOpen: boolean) => void;
+  isOrdersOpen: boolean;
+  setIsOrdersOpen: (isOpen: boolean) => void;
   orderType: OrderType;
   setOrderType: (type: OrderType) => void;
   searchQuery: string;
@@ -51,6 +53,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const { user, openAuthModal } = useAuth();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const [orderType, setOrderType] = useState<OrderType>("delivery");
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingCartItem, setPendingCartItem] = useState<PendingCartItem | null>(() => {
@@ -219,6 +222,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         subtotal,
         isCartOpen,
         setIsCartOpen,
+        isOrdersOpen,
+        setIsOrdersOpen,
         orderType,
         setOrderType,
         searchQuery,

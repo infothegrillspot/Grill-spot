@@ -33,6 +33,8 @@ export const CartDrawer = () => {
     subtotal,
     isCartOpen,
     setIsCartOpen,
+    isOrdersOpen,
+    setIsOrdersOpen,
     totalItems,
     orderType,
     setOrderType,
@@ -210,12 +212,24 @@ export const CartDrawer = () => {
                 <span className="font-medium text-primary">Rs. {grandTotal.toLocaleString()}</span>
               </div>
             </div>
-            <Button
-              className="w-full rounded-full text-[11px] uppercase tracking-wider font-normal mt-4"
-              onClick={handleClose}
-            >
-              Done
-            </Button>
+            <div className="flex items-center gap-2 w-full pt-2">
+              <Button
+                variant="outline"
+                className="flex-1 rounded-full text-xs font-normal border-primary/30 text-primary hover:bg-primary/5"
+                onClick={() => {
+                  handleClose();
+                  setIsOrdersOpen(true);
+                }}
+              >
+                Track in Order History
+              </Button>
+              <Button
+                className="flex-1 rounded-full text-xs font-normal"
+                onClick={handleClose}
+              >
+                Done
+              </Button>
+            </div>
           </div>
         ) : !user ? (
           <div className="flex-1 p-6 flex flex-col items-center justify-center text-center space-y-4">

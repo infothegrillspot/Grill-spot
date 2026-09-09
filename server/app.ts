@@ -164,12 +164,24 @@ d1Router.post("/users/upsert", async (req: Request, res: Response) => {
 // 4. Orders Endpoints
 d1Router.get("/orders", async (req: Request, res: Response) => {
   try {
-    const { userId } = req.query;
+    const { userId, email } = req.query;
     const fetchOrders = () => {
+      if (userId && email) {
+        return runD1Query(
+          "SELECT * FROM orders WHERE userId = ? OR (customerEmail IS NOT NULL AND customerEmail = ?) ORDER BY createdAt DESC",
+          [String(userId), String(email).toLowerCase()]
+        );
+      }
       if (userId) {
         return runD1Query(
           "SELECT * FROM orders WHERE userId = ? ORDER BY createdAt DESC",
           [String(userId)]
+        );
+      }
+      if (email) {
+        return runD1Query(
+          "SELECT * FROM orders WHERE customerEmail = ? ORDER BY createdAt DESC",
+          [String(email).toLowerCase()]
         );
       }
       return runD1Query("SELECT * FROM orders ORDER BY createdAt DESC");
@@ -182,9 +194,20 @@ d1Router.get("/orders", async (req: Request, res: Response) => {
       const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg.includes("no such column") || errMsg.includes("no such table")) {
         await initializeD1Database();
-        orders = await (userId
-          ? runD1Query("SELECT * FROM orders WHERE userId = ?", [String(userId)]).catch(() => [])
-          : runD1Query("SELECT * FROM orders").catch(() => []));
+        orders = await (userId || email
+          ? runD1Query(
+              userId && email
+                ? "SELECT * FROM orders WHERE userId = ? OR customerEmail = ? ORDER BY createdAt DESC"
+                : userId
+                ? "SELECT * FROM orders WHERE userId = ? ORDER BY createdAt DESC"
+                : "SELECT * FROM orders WHERE customerEmail = ? ORDER BY createdAt DESC",
+              userId && email
+                ? [String(userId), String(email).toLowerCase()]
+                : userId
+                ? [String(userId)]
+                : [String(email).toLowerCase()]
+            ).catch(() => [])
+          : runD1Query("SELECT * FROM orders ORDER BY createdAt DESC").catch(() => []));
       } else {
         throw err;
       }
@@ -224,6 +247,7 @@ d1Router.post("/orders", async (req: Request, res: Response) => {
       id = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       userId,
       customerName,
+      customerEmail,
       phone,
       orderType = "delivery",
       subtotal = 0,
@@ -243,12 +267,13 @@ d1Router.post("/orders", async (req: Request, res: Response) => {
     const performInsert = async () => {
       await runD1Query(
         `INSERT INTO orders (
-          id, userId, customerName, phone, orderType, subtotal, deliveryFee, grandTotal, address, specialInstructions, status, itemsJson, riderId, riderName, riderPhone, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+          id, userId, customerName, customerEmail, phone, orderType, subtotal, deliveryFee, grandTotal, address, specialInstructions, status, itemsJson, riderId, riderName, riderPhone, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
         [
           id,
           userId || null,
           customerName || "Guest",
+          customerEmail ? String(customerEmail).toLowerCase() : null,
           phone || "",
           orderType,
           Number(subtotal),

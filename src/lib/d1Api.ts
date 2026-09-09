@@ -26,6 +26,7 @@ export interface D1Order {
   id: string;
   userId?: string | null;
   customerName: string;
+  customerEmail?: string | null;
   phone: string;
   orderType: "delivery" | "pickup" | "dine_in" | "dinein" | "takeaway";
   subtotal: number;
@@ -161,9 +162,13 @@ export async function upsertD1User(user: Partial<D1User> & { id: string }): Prom
 }
 
 // 2. Orders
-export async function fetchD1Orders(userId?: string): Promise<D1Order[]> {
+export async function fetchD1Orders(userId?: string, email?: string): Promise<D1Order[]> {
   try {
-    const url = userId ? `/api/d1/orders?userId=${encodeURIComponent(userId)}` : "/api/d1/orders";
+    const params = new URLSearchParams();
+    if (userId) params.set("userId", userId);
+    if (email) params.set("email", email);
+    const queryString = params.toString();
+    const url = queryString ? `/api/d1/orders?${queryString}` : "/api/d1/orders";
     const res = await fetch(url);
     const data = await res.json();
     return data.success ? data.orders : [];

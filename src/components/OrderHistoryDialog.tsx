@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -13,11 +13,15 @@ import {
   Bike,
   Store,
   Utensils,
-  ChevronRight,
   AlertCircle,
   Loader2,
   MapPin,
   Calendar,
+  Database,
+  RefreshCw,
+  LogIn,
+  Receipt,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,100 +31,107 @@ interface OrderHistoryDialogProps {
 }
 
 export const OrderHistoryDialog = ({ open, onOpenChange }: OrderHistoryDialogProps) => {
-  const { user } = useAuth();
+  const { user, openAuthModal } = useAuth();
   const { addToCart, setIsCartOpen } = useCart();
   const [orders, setOrders] = useState<D1Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedOrder, setSelectedOrder] = useState<D1Order | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const getLocalOrderIds = (): string[] => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("grillspot_guest_orders") || "[]");
+      return Array.isArray(stored) ? stored : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const loadOrders = useCallback(async () => {
+    const localIds = getLocalOrderIds();
+    let d1Fetched: D1Order[] = [];
+
+    try {
+      if (user?.uid || user?.email) {
+        d1Fetched = await fetchD1Orders(user?.uid || undefined, user?.email || undefined);
+      } else if (localIds.length > 0) {
+        const allRecent = await fetchD1Orders();
+        d1Fetched = allRecent.filter((o) => localIds.includes(o.id));
+      }
+    } catch (err) {
+      console.warn("Could not fetch D1 orders:", err);
+    }
+
+    // Firestore real-time subscription with strict user isolation
+    const unsubscribe = subscribeToOrders((fsOrders: OrderRecord[]) => {
+      const userOrders = fsOrders.filter((o) => {
+        if (!o || !o.id) return false;
+        if (user?.uid && o.userId === user.uid) return true;
+        if (user?.email && o.customerEmail && o.customerEmail.toLowerCase() === user.email.toLowerCase()) return true;
+        if (localIds.includes(o.id)) return true;
+        return false;
+      });
+
+      const mapped: D1Order[] = userOrders.map((o) => ({
+        id: o.id || "order-temp",
+        userId: o.userId,
+        customerName: o.customerName || "Customer",
+        customerEmail: o.customerEmail,
+        phone: o.phone || "",
+        orderType: (o.orderType === "takeaway" ? "takeaway" : o.orderType === "delivery" ? "delivery" : "dine_in"),
+        subtotal: o.subtotal,
+        deliveryFee: o.deliveryFee,
+        grandTotal: o.grandTotal,
+        address: o.address || "",
+        specialInstructions: o.specialInstructions,
+        status: (o.status === "delivering" ? "out_for_delivery" : o.status === "completed" ? "delivered" : o.status) as D1Order["status"],
+        riderName: o.riderName,
+        riderPhone: o.riderPhone,
+        items: o.items.map((it) => ({
+          id: it.id,
+          name: it.name,
+          price: it.price,
+          quantity: it.quantity,
+          notes: it.notes,
+        })),
+        createdAt: typeof o.createdAt === "string" ? o.createdAt : new Date().toISOString(),
+      }));
+
+      // Merge D1 fetched orders and Firestore live orders
+      const map = new Map<string, D1Order>();
+      d1Fetched.forEach((d) => map.set(d.id, d));
+      mapped.forEach((m) => map.set(m.id, { ...(map.get(m.id) || {}), ...m }));
+
+      const finalOrders = Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      );
+
+      setOrders(finalOrders);
+      setLoading(false);
+      setIsRefreshing(false);
+    });
+
+    return unsubscribe;
+  }, [user]);
 
   useEffect(() => {
     if (!open) return;
-
-    let isMounted = true;
     setLoading(true);
 
-    const getLocalOrderIds = (): string[] => {
-      try {
-        const stored = JSON.parse(localStorage.getItem("grillspot_guest_orders") || "[]");
-        return Array.isArray(stored) ? stored : [];
-      } catch {
-        return [];
-      }
-    };
-
-    const loadOrders = async () => {
-      const localIds = getLocalOrderIds();
-      let d1Fetched: D1Order[] = [];
-
-      try {
-        if (user?.uid) {
-          d1Fetched = await fetchD1Orders(user.uid);
-        }
-      } catch (err) {
-        console.warn("Could not fetch D1 orders:", err);
-      }
-
-      // Firestore real-time subscription with strict user isolation
-      const unsubscribe = subscribeToOrders((fsOrders: OrderRecord[]) => {
-        if (!isMounted) return;
-
-        // Strictly filter orders to only this customer
-        const userOrders = fsOrders.filter((o) => {
-          if (!o || !o.id) return false;
-          if (user?.uid && o.userId === user.uid) return true;
-          if (user?.email && o.customerEmail && o.customerEmail.toLowerCase() === user.email.toLowerCase()) return true;
-          if (localIds.includes(o.id)) return true;
-          return false;
-        });
-
-        const mapped: D1Order[] = userOrders.map((o) => ({
-          id: o.id || "order-temp",
-          userId: o.userId,
-          customerName: o.customerName || "Customer",
-          phone: o.phone || "",
-          orderType: (o.orderType === "takeaway" ? "takeaway" : o.orderType === "delivery" ? "delivery" : "dine_in"),
-          subtotal: o.subtotal,
-          deliveryFee: o.deliveryFee,
-          grandTotal: o.grandTotal,
-          address: o.address || "",
-          specialInstructions: o.specialInstructions,
-          status: (o.status === "delivering" ? "out_for_delivery" : o.status === "completed" ? "delivered" : o.status) as D1Order["status"],
-          riderName: o.riderName,
-          riderPhone: o.riderPhone,
-          items: o.items.map((it) => ({
-            id: it.id,
-            name: it.name,
-            price: it.price,
-            quantity: it.quantity,
-            notes: it.notes,
-          })),
-          createdAt: typeof o.createdAt === "string" ? o.createdAt : new Date().toISOString(),
-        }));
-
-        // Merge D1 fetched orders and Firestore live orders
-        const map = new Map<string, D1Order>();
-        d1Fetched.forEach((d) => map.set(d.id, d));
-        mapped.forEach((m) => map.set(m.id, { ...(map.get(m.id) || {}), ...m }));
-
-        const finalOrders = Array.from(map.values()).sort(
-          (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-        );
-
-        setOrders(finalOrders);
-        setLoading(false);
-      });
-
-      return () => {
-        unsubscribe();
-      };
-    };
-
-    loadOrders();
+    let unsubscribeFn: (() => void) | undefined;
+    loadOrders().then((unsub) => {
+      unsubscribeFn = unsub;
+    });
 
     return () => {
-      isMounted = false;
+      if (unsubscribeFn) unsubscribeFn();
     };
-  }, [open, user]);
+  }, [open, loadOrders]);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await loadOrders();
+    toast.success("Order history synced with Cloudflare D1 SQL");
+  };
 
   const handleReorder = (order: D1Order) => {
     order.items.forEach((item) => {
@@ -130,7 +141,7 @@ export const OrderHistoryDialog = ({ open, onOpenChange }: OrderHistoryDialogPro
         price: item.price,
         image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=600&q=80",
         notes: item.notes,
-      });
+      }, item.quantity);
     });
 
     toast.success("Items added to your cart!", {
@@ -145,32 +156,32 @@ export const OrderHistoryDialog = ({ open, onOpenChange }: OrderHistoryDialogPro
       case "delivered":
       case "completed":
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium border border-emerald-500/20">
             <CheckCircle2 className="w-3 h-3" /> Delivered
           </span>
         );
       case "out_for_delivery":
       case "delivering":
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium">
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium border border-blue-500/20">
             <Bike className="w-3 h-3" /> Out for Delivery
           </span>
         );
       case "preparing":
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium">
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium border border-amber-500/20">
             <Utensils className="w-3 h-3" /> On the Grill
           </span>
         );
       case "cancelled":
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 font-medium">
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 font-medium border border-rose-500/20">
             <AlertCircle className="w-3 h-3" /> Cancelled
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium border border-primary/20">
             <Clock className="w-3 h-3" /> Order Received
           </span>
         );
@@ -195,65 +206,145 @@ export const OrderHistoryDialog = ({ open, onOpenChange }: OrderHistoryDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[540px] max-h-[85vh] overflow-y-auto bg-card border-border p-6">
-        <DialogHeader className="space-y-1.5 text-left pb-2 border-b border-border">
-          <div className="flex items-center gap-2 text-primary">
-            <Clock className="w-4 h-4" />
-            <span className="text-xs uppercase tracking-wider font-semibold">
-              Dining & Takeaway
-            </span>
+      <DialogContent className="sm:max-w-[580px] max-h-[85vh] overflow-y-auto bg-card border-border p-6 shadow-2xl">
+        <DialogHeader className="space-y-2 text-left pb-3 border-b border-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-primary">
+              <Clock className="w-4 h-4" />
+              <span className="text-xs uppercase tracking-wider font-semibold">
+                Customer Orders
+              </span>
+            </div>
+            {/* Cloudflare D1 Sync indicator badge */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-medium font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <Database className="w-3 h-3 text-emerald-500" />
+              <span>Cloudflare D1 SQL Synced</span>
+            </div>
           </div>
-          <DialogTitle className="text-xl font-light tracking-tight flex items-center justify-between">
-            <span>Order History</span>
-            <span className="text-xs font-normal text-muted-foreground">
-              {orders.length} {orders.length === 1 ? "order" : "orders"}
-            </span>
-          </DialogTitle>
+
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-xl font-light tracking-tight text-foreground">
+              Order History
+            </DialogTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-normal text-muted-foreground">
+                {orders.length} {orders.length === 1 ? "order" : "orders"}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 rounded-full text-muted-foreground hover:text-foreground"
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                title="Sync from Cloudflare D1 SQL"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
+              </Button>
+            </div>
+          </div>
+
           <DialogDescription className="text-xs text-muted-foreground font-light">
-            Track live grill orders or re-order your favorite burgers, BBQ and pizzas.
+            Review the items you ordered, live kitchen progress, and receipt details saved in your Cloudflare D1 SQL account.
           </DialogDescription>
+
+          {/* User Status Banner */}
+          {user ? (
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-accent/40 border border-border/60 text-xs">
+              <div className="flex items-center gap-2 truncate">
+                <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-[10px] flex-shrink-0">
+                  {user.displayName ? user.displayName[0].toUpperCase() : "U"}
+                </div>
+                <div className="truncate">
+                  <p className="font-medium text-foreground truncate">{user.displayName || "Customer Account"}</p>
+                  <p className="text-[11px] text-muted-foreground font-mono truncate">{user.email}</p>
+                </div>
+              </div>
+              <span className="text-[10px] text-muted-foreground bg-background px-2 py-0.5 rounded border border-border flex-shrink-0">
+                Cloudflare D1 ID: {user.uid.slice(0, 8)}...
+              </span>
+            </div>
+          ) : (
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 flex items-center justify-between gap-3 text-xs">
+              <div>
+                <p className="font-medium text-foreground">Want to see all your past orders?</p>
+                <p className="text-[11px] text-muted-foreground font-light">
+                  Sign in with Google to sync and view your complete Cloudflare D1 SQL order history across all devices.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="rounded-full text-xs font-medium h-8 px-3.5 flex-shrink-0 flex items-center gap-1.5"
+                onClick={() => {
+                  onOpenChange(false);
+                  openAuthModal("Sign in to view your Cloudflare D1 order history.");
+                }}
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                Sign In
+              </Button>
+            </div>
+          )}
         </DialogHeader>
 
         {loading ? (
           <div className="py-16 text-center">
             <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-2" />
-            <p className="text-xs text-muted-foreground font-light">Loading your orders...</p>
+            <p className="text-xs text-muted-foreground font-light">Loading orders from Cloudflare D1 SQL database...</p>
           </div>
         ) : orders.length === 0 ? (
           <div className="py-14 text-center space-y-3">
             <div className="w-14 h-14 rounded-full bg-accent text-muted-foreground flex items-center justify-center mx-auto">
               <ShoppingBag className="w-6 h-6 stroke-1" />
             </div>
-            <h3 className="text-base font-normal text-foreground">No orders yet</h3>
+            <h3 className="text-base font-normal text-foreground">No orders found</h3>
             <p className="text-xs text-muted-foreground max-w-xs mx-auto font-light leading-relaxed">
-              When you place an order for delivery or takeaway at The Grill Spot Lahore, it will appear here.
+              {user
+                ? "You haven't placed any flame-grilled orders yet. When you order burgers, shawarma, or BBQ, they will be saved here in Cloudflare D1 SQL."
+                : "No local or guest orders found on this device. Sign in to view your Cloudflare D1 SQL order history or explore our menu."}
             </p>
-            <Button
-              size="sm"
-              className="rounded-full text-xs font-normal mt-2"
-              onClick={() => onOpenChange(false)}
-            >
-              Explore Menu
-            </Button>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <Button
+                size="sm"
+                className="rounded-full text-xs font-normal"
+                onClick={() => onOpenChange(false)}
+              >
+                Explore Menu
+              </Button>
+              {!user && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full text-xs font-normal"
+                  onClick={() => {
+                    onOpenChange(false);
+                    openAuthModal();
+                  }}
+                >
+                  Sign In
+                </Button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="space-y-4 pt-3">
             {orders.map((order) => (
               <div
                 key={order.id}
-                className="p-4 rounded-xl border border-border bg-background/60 hover:bg-background transition-colors space-y-3"
+                className="p-4 rounded-xl border border-border bg-background/70 hover:bg-background transition-all space-y-3 shadow-sm"
               >
                 {/* Top Row: Order ID, Date & Status */}
                 <div className="flex items-start justify-between gap-2 border-b border-border/60 pb-2.5">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-medium text-foreground">
+                      <span className="text-xs font-mono font-semibold text-foreground">
                         #{order.id.slice(-6).toUpperCase()}
                       </span>
                       <span className="text-[11px] text-muted-foreground flex items-center gap-1 font-light capitalize">
                         {order.orderType === "delivery" ? (
                           <Bike className="w-3 h-3 text-primary" />
-                        ) : order.orderType === "takeaway" ? (
+                        ) : order.orderType === "takeaway" || order.orderType === "pickup" ? (
                           <Store className="w-3 h-3 text-primary" />
                         ) : (
                           <Utensils className="w-3 h-3 text-primary" />
@@ -269,32 +360,70 @@ export const OrderHistoryDialog = ({ open, onOpenChange }: OrderHistoryDialogPro
 
                   <div className="flex flex-col items-end gap-1">
                     {getStatusBadge(order.status)}
-                    <span className="text-xs font-medium text-primary">
+                    <span className="text-xs font-bold text-primary">
                       Rs. {order.grandTotal.toLocaleString()}
                     </span>
                   </div>
                 </div>
 
-                {/* Items Summary */}
-                <div className="space-y-1.5">
-                  {order.items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-xs font-light">
-                      <span className="text-foreground/90 truncate max-w-[280px]">
-                        {item.quantity}x {item.name}
-                      </span>
-                      <span className="text-muted-foreground font-mono">
-                        Rs. {(item.price * item.quantity).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
+                {/* What he ordered - Detailed item breakdown */}
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground flex items-center gap-1">
+                    <Receipt className="w-3 h-3 text-primary" />
+                    Items Ordered ({order.items.reduce((s, i) => s + (i.quantity || 1), 0)})
+                  </p>
+                  <div className="divide-y divide-border/40 bg-card/60 rounded-lg p-2 border border-border/50 space-y-1.5">
+                    {order.items.map((item, idx) => (
+                      <div key={idx} className="pt-1.5 first:pt-0">
+                        <div className="flex justify-between items-start text-xs">
+                          <span className="font-medium text-foreground leading-snug">
+                            {item.quantity}x {item.name}
+                          </span>
+                          <span className="text-foreground/90 font-mono font-medium ml-2">
+                            Rs. {(item.price * item.quantity).toLocaleString()}
+                          </span>
+                        </div>
+                        {item.notes && (
+                          <p className="text-[10px] text-amber-600 dark:text-amber-400 font-light mt-0.5 flex items-center gap-1">
+                            <FileText className="w-2.5 h-2.5" /> Note: {item.notes}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Subtotal & Delivery breakdown */}
+                <div className="pt-1 border-t border-border/50 text-[11px] space-y-1 text-muted-foreground font-light">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span className="font-mono">Rs. {order.subtotal.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Delivery Fee:</span>
+                    <span className="font-mono">
+                      {order.deliveryFee > 0 ? `Rs. ${order.deliveryFee}` : "Free"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between font-medium text-foreground pt-0.5 border-t border-border/30">
+                    <span>Total Amount:</span>
+                    <span className="text-primary font-bold font-mono">Rs. {order.grandTotal.toLocaleString()}</span>
+                  </div>
                 </div>
 
                 {/* Address (for delivery) */}
                 {order.address && (
-                  <div className="text-[11px] text-muted-foreground font-light flex items-center gap-1.5 pt-1 border-t border-border/40 truncate">
+                  <div className="text-[11px] text-muted-foreground font-light flex items-center gap-1.5 pt-1 truncate">
                     <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
                     <span className="truncate">{order.address}</span>
                   </div>
+                )}
+
+                {/* Special Instructions if any */}
+                {order.specialInstructions && (
+                  <p className="text-[10px] text-muted-foreground italic bg-accent/30 p-1.5 rounded border border-border/40">
+                    Instructions: {order.specialInstructions}
+                  </p>
                 )}
 
                 {/* Rider Info if assigned */}
@@ -319,8 +448,12 @@ export const OrderHistoryDialog = ({ open, onOpenChange }: OrderHistoryDialogPro
                   </div>
                 )}
 
-                {/* Actions: Reorder */}
-                <div className="pt-2 flex justify-end gap-2">
+                {/* Footer: Cloudflare D1 indicator and Reorder action */}
+                <div className="pt-2 border-t border-border/60 flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-mono">
+                    <Database className="w-2.5 h-2.5 text-emerald-500" />
+                    <span>Saved in Cloudflare D1 SQL</span>
+                  </span>
                   <Button
                     type="button"
                     variant="outline"
